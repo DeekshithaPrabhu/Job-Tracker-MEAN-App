@@ -69,6 +69,8 @@ export interface Job {
   status: JobStatus;
   statusChangedAt?: string;
   statusHistory: StatusChange[];
+  /** Set by the API when a status change cancelled upcoming events (withdrawing from a job). */
+  cancelledEvents?: number;
   isFavorite: boolean;
   isArchived: boolean;
   createdAt?: string;

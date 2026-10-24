@@ -42,6 +42,8 @@ type Page = 'applications' | 'schedule';
       </div>
     </header>
 
+    @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+
     @if (page() === 'applications') {
       <section class="hero">
         <h1>Applications</h1>
@@ -224,7 +226,7 @@ type Page = 'applications' | 'schedule';
     }
 
     @if (formOpen()) {
-      <app-job-form [job]="editing()" (saved)="onSaved()" (closed)="closeForm()" />
+      <app-job-form [job]="editing()" (saved)="onSaved($event)" (closed)="closeForm()" />
     }
 
     @if (store.detail(); as ev) {
@@ -260,6 +262,8 @@ export class AppComponent {
   readonly layout = signal<Layout>(this.savedLayout());
   readonly loading = signal(false);
   readonly error = signal('');
+  readonly notice = signal('');
+  private noticeTimer?: ReturnType<typeof setTimeout>;
   readonly selectedId = signal<string | null>(null);
   readonly formOpen = signal(false);
   readonly editing = signal<Job | null>(null);
@@ -382,9 +386,11 @@ export class AppComponent {
     this.editing.set(null);
   }
 
-  onSaved(): void {
+  onSaved(job: Job): void {
     this.closeForm();
     this.load();
+    this.store.load(); // a status change in the form can cancel events
+    this.announceCancelled(job);
   }
 
   // --- Pipeline ---
@@ -417,6 +423,10 @@ export class AppComponent {
       next: (saved) => {
         this.jobs.update((list) => list.map((j) => (j._id === saved._id ? saved : j)));
         this.error.set('');
+        if (saved.cancelledEvents) {
+          this.store.load();
+          this.announceCancelled(saved);
+        }
       },
       error: () => {
         this.jobs.set(before);
@@ -463,6 +473,14 @@ export class AppComponent {
     } catch {
       return 'board';
     }
+  }
+
+  private announceCancelled(job: Job): void {
+    const n = job.cancelledEvents ?? 0;
+    if (!n) return;
+    this.notice.set(`Withdrawn from ${job.company}. ${n} upcoming ${n === 1 ? 'event was' : 'events were'} cancelled.`);
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => this.notice.set(''), 7000);
   }
 
   private fail(message: string): void {

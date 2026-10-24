@@ -17,6 +17,16 @@ const pick = (body) => Object.fromEntries(EDITABLE.filter((k) => k in body).map(
 
 const SORTABLE = { dateSaved: 'dateSaved', company: 'company', title: 'title', updatedAt: 'updatedAt' };
 
+// Withdrawing from a job means its upcoming interviews, calls and follow-ups no longer apply.
+async function cancelOpenEvents(job) {
+  if (job.status !== 'Withdrawn') return 0;
+  const result = await Event.updateMany(
+    { job: job._id, status: { $in: Event.ACTIVE_STATUSES } },
+    { $set: { status: 'Cancelled' }, $unset: { completedAt: '' } }
+  );
+  return result.modifiedCount;
+}
+
 router.param('id', (req, res, next, id) => {
   if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid job id' });
   next();
@@ -73,9 +83,10 @@ router.put('/:id', wrap(async (req, res) => {
   const job = await Job.findById(req.params.id);
   if (!job) return res.status(404).json({ message: 'Job not found' });
   job.set(pick(req.body));
-  if (req.body.status !== undefined) job.changeStatus(req.body.status, req.body.statusNote);
+  const moved = req.body.status !== undefined && job.changeStatus(req.body.status, req.body.statusNote);
   await job.save(); // runs all validators, including salary min/max
-  res.json(job);
+  const cancelledEvents = moved ? await cancelOpenEvents(job) : 0;
+  res.json({ ...job.toJSON(), cancelledEvents });
 }));
 
 // PATCH /api/jobs/:id/status  { status: string, note?: string }  -> moves the job and records history
@@ -84,9 +95,10 @@ router.patch('/:id/status', wrap(async (req, res) => {
   if (!status) return res.status(400).json({ message: 'Status is required', errors: { status: 'Status is required' } });
   const job = await Job.findById(req.params.id);
   if (!job) return res.status(404).json({ message: 'Job not found' });
-  job.changeStatus(status, note);
+  const moved = job.changeStatus(status, note);
   await job.save();
-  res.json(job);
+  const cancelledEvents = moved ? await cancelOpenEvents(job) : 0;
+  res.json({ ...job.toJSON(), cancelledEvents });
 }));
 
 // PATCH /api/jobs/:id/favorite  { value?: boolean }  (toggles when value is omitted)
