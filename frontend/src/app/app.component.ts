@@ -2,17 +2,18 @@ import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cd
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, debounceTime } from 'rxjs';
 import { DashboardComponent } from './dashboard.component';
 import { EventDetailComponent } from './event-detail.component';
 import { EventFormComponent } from './event-form.component';
 import { JobDetailComponent } from './job-detail.component';
+import { JobFiltersComponent } from './job-filters.component';
 import { JobFormComponent } from './job-form.component';
+import { JobQueryStore } from './job-query.store';
 import {
-  EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, Job, JobStats, JobStatus, JobView, STATUSES, STATUS_COLORS,
-  WORK_MODES, formatSalary
+  Job, JobStats, JobStatus, JobView, PRIORITY_COLORS, Priority, STATUSES, STATUS_COLORS, formatSalary
 } from './job.model';
 import { JobService } from './job.service';
+import { PagerComponent } from './pager.component';
 import { RemindersComponent } from './reminders.component';
 import { ScheduleComponent } from './schedule.component';
 import { ScheduleStore } from './schedule.store';
@@ -24,7 +25,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
   selector: 'app-root',
   standalone: true,
   imports: [
-    DatePipe, CdkDropListGroup, CdkDropList, CdkDrag, JobFormComponent, JobDetailComponent,
+    DatePipe, CdkDropListGroup, CdkDropList, CdkDrag, JobFormComponent, JobDetailComponent, JobFiltersComponent, PagerComponent,
     ScheduleComponent, DashboardComponent, EventFormComponent, EventDetailComponent, RemindersComponent
   ],
   template: `
@@ -54,7 +55,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
         </p>
       </section>
 
-      <section class="toolbar" aria-label="Filters">
+      <section class="toolbar" aria-label="List and layout">
         <div class="segmented" role="group" aria-label="Job list">
           @for (v of views; track v.id) {
             <button type="button" [class.on]="view() === v.id" [attr.aria-pressed]="view() === v.id" (click)="setView(v.id)">
@@ -63,51 +64,31 @@ type Page = 'dashboard' | 'applications' | 'schedule';
           }
         </div>
 
-        <input class="pill-input" type="search" placeholder="Search company, title, skill" aria-label="Search"
-               (input)="search$.next($any($event.target).value)" />
-
-        @if (layout() === 'table') {
-          <select class="pill-select" aria-label="Status" (change)="setFilter('status', $any($event.target).value)">
-            <option value="">Any status</option>
-            @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
-          </select>
-        }
-        <select class="pill-select" aria-label="Work mode" (change)="setFilter('workMode', $any($event.target).value)">
-          <option value="">Any work mode</option>
-          @for (m of workModes; track m) { <option [value]="m">{{ m }}</option> }
-        </select>
-        <select class="pill-select" aria-label="Employment type" (change)="setFilter('employmentType', $any($event.target).value)">
-          <option value="">Any type</option>
-          @for (t of employmentTypes; track t) { <option [value]="t">{{ t }}</option> }
-        </select>
-        <select class="pill-select" aria-label="Experience level" (change)="setFilter('experienceLevel', $any($event.target).value)">
-          <option value="">Any level</option>
-          @for (l of levels; track l) { <option [value]="l">{{ l }}</option> }
-        </select>
-        <select class="pill-select" aria-label="Sort by" (change)="setSort($any($event.target).value)">
-          <option value="dateSaved:desc">Newest saved</option>
-          <option value="dateSaved:asc">Oldest saved</option>
-          <option value="company:asc">Company A to Z</option>
-          <option value="title:asc">Job title A to Z</option>
-        </select>
-
         <div class="segmented push-right" role="group" aria-label="Layout">
           <button type="button" [class.on]="layout() === 'board'" [attr.aria-pressed]="layout() === 'board'" (click)="setLayout('board')">Board</button>
           <button type="button" [class.on]="layout() === 'table'" [attr.aria-pressed]="layout() === 'table'" (click)="setLayout('table')">Table</button>
         </div>
       </section>
 
+      <app-job-filters />
+
       <main class="page" aria-live="polite">
         @if (error()) { <p class="banner err" role="alert">{{ error() }}</p> }
 
         @if (layout() === 'board') {
+          @if (!jobs().length && !loading() && q.activeCount() > 0) {
+            <div class="empty">
+              <strong>{{ emptyTitle() }}</strong>
+              <p>{{ emptyHint() }}</p>
+            </div>
+          }
           <div class="board" cdkDropListGroup>
             @for (col of columns(); track col.status) {
               <section class="column" [style.--c]="color(col.status)" [attr.aria-label]="col.status">
                 <header class="col-head">
                   <span class="dot"></span>
                   <h2>{{ col.status }}</h2>
-                  <span class="col-count">{{ col.jobs.length }}</span>
+                  <span class="col-count" [attr.aria-label]="col.jobs.length === col.total ? col.total + ' jobs' : col.jobs.length + ' shown of ' + col.total + ' jobs'">{{ col.jobs.length === col.total ? col.total : col.jobs.length + ' of ' + col.total }}</span>
                 </header>
 
                 <ul class="col-list" cdkDropList cdkDropListSortingDisabled [cdkDropListData]="col.status"
@@ -131,6 +112,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
                         </div>
 
                         <div class="chips">
+                          <span class="chip" [style.--c]="priorityColor(job.priority)"><span class="prio-dot"></span>{{ job.priority || 'Medium' }}</span>
                           <span class="chip"><span class="mode-dot" [attr.data-mode]="job.workMode"></span>{{ job.workMode }}</span>
                           <span class="chip">{{ job.employmentType }}</span>
                           @if (job.location) { <span class="chip">{{ job.location }}</span> }
@@ -145,7 +127,13 @@ type Page = 'dashboard' | 'applications' | 'schedule';
                           </ul>
                         }
 
-                        <p class="foot">In this stage since {{ (job.statusChangedAt || job.dateSaved) | date: 'd MMM' }}</p>
+                        @if (job.nextInterviewAt) {
+                          <p class="foot next-int">Interview {{ job.nextInterviewAt | date: 'EEE d MMM, h:mm a' }}</p>
+                        }
+                        <p class="foot">
+                          @if (job.appliedAt) { Applied {{ job.appliedAt | date: 'd MMM' }}. }
+                          In this stage since {{ (job.statusChangedAt || job.dateSaved) | date: 'd MMM' }}
+                        </p>
                       </article>
                     </li>
                   } @empty {
@@ -168,11 +156,12 @@ type Page = 'dashboard' | 'applications' | 'schedule';
                   <tr>
                     <th scope="col">Company</th>
                     <th scope="col">Status</th>
+                    <th scope="col">Priority</th>
                     <th scope="col">Work mode</th>
-                    <th scope="col">Type</th>
                     <th scope="col">Salary</th>
+                    <th scope="col">Applied</th>
+                    <th scope="col">Next interview</th>
                     <th scope="col">Saved</th>
-                    <th scope="col">Status changed</th>
                     <th scope="col"><span class="sr-only">Actions</span></th>
                   </tr>
                 </thead>
@@ -182,6 +171,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
                       <td>
                         <span class="company">{{ job.company }}</span>
                         <span class="title block">{{ job.title }}</span>
+                        @if (job.location) { <span class="title block">{{ job.location }}</span> }
                       </td>
                       <td (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
                         <span class="status-pill" [style.--c]="color(job.status)">
@@ -191,11 +181,12 @@ type Page = 'dashboard' | 'applications' | 'schedule';
                           </select>
                         </span>
                       </td>
+                      <td><span class="chip" [style.--c]="priorityColor(job.priority)"><span class="prio-dot"></span>{{ job.priority || 'Medium' }}</span></td>
                       <td><span class="chip"><span class="mode-dot" [attr.data-mode]="job.workMode"></span>{{ job.workMode }}</span></td>
-                      <td>{{ job.employmentType }}</td>
                       <td>{{ salary(job) || 'Not listed' }}</td>
+                      <td>{{ job.appliedAt ? (job.appliedAt | date: 'd MMM y') : 'Not yet' }}</td>
+                      <td>{{ job.nextInterviewAt ? (job.nextInterviewAt | date: 'd MMM, h:mm a') : 'None' }}</td>
                       <td>{{ job.dateSaved | date: 'd MMM y' }}</td>
-                      <td>{{ (job.statusChangedAt || job.dateSaved) | date: 'd MMM y' }}</td>
                       <td class="row-actions" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
                         <button type="button" class="icon fav" [class.on]="job.isFavorite" [attr.aria-pressed]="job.isFavorite"
                                 [attr.aria-label]="(job.isFavorite ? 'Remove from favorites: ' : 'Add to favorites: ') + job.title"
@@ -211,13 +202,15 @@ type Page = 'dashboard' | 'applications' | 'schedule';
             </div>
           }
         }
+
+        <app-pager />
       </main>
     } @else if (page() === 'schedule') {
       <app-schedule />
     } @else {
       <app-dashboard
         [refreshKey]="jobsVersion()"
-        (openJob)="openJobById($event.id, $event.archived)"
+        (openJob)="openJobById($event.id)"
         (goto)="setPage($event)"
         (saveJob)="openForm(null)" />
     }
@@ -259,9 +252,7 @@ export class AppComponent {
     { id: 'archived', label: 'Archived' }
   ];
   readonly statuses = STATUSES;
-  readonly workModes = WORK_MODES;
-  readonly employmentTypes = EMPLOYMENT_TYPES;
-  readonly levels = EXPERIENCE_LEVELS;
+  readonly q = inject(JobQueryStore);
 
   readonly jobs = signal<Job[]>([]);
   readonly stats = signal<JobStats>({ active: 0, favorites: 0, archived: 0 });
@@ -278,25 +269,30 @@ export class AppComponent {
   readonly formOpen = signal(false);
   readonly editing = signal<Job | null>(null);
 
-  readonly selected = computed(() => this.jobs().find((j) => j._id === this.selectedId()) ?? null);
-  readonly columns = computed(() =>
-    STATUSES.map((status) => ({
-      status,
-      jobs: this.jobs().filter((j) => (j.status ?? STATUSES[0]) === status)
-    }))
+  /** A job opened from the dashboard that is not on the current page of results. */
+  private readonly outsideJob = signal<Job | null>(null);
+  readonly selected = computed(
+    () =>
+      this.jobs().find((j) => j._id === this.selectedId()) ??
+      (this.outsideJob()?._id === this.selectedId() ? this.outsideJob() : null)
   );
+  /** One column per status (only the chosen statuses when a status filter is on), counted across all pages. */
+  readonly columns = computed(() => {
+    const chosen = this.q.filters().statuses;
+    const counts = this.q.statusCounts();
+    return STATUSES.filter((s) => !chosen.length || chosen.includes(s)).map((status) => ({
+      status,
+      jobs: this.jobs().filter((j) => (j.status ?? STATUSES[0]) === status),
+      total: counts[status] ?? 0
+    }));
+  });
 
-  readonly search$ = new Subject<string>();
   dragging = false;
-
-  private filters = { search: '', status: '', workMode: '', employmentType: '', experienceLevel: '' };
-  private sort = { sort: 'dateSaved', order: 'desc' as 'asc' | 'desc' };
+  private loadSeq = 0;
 
   constructor() {
-    this.search$.pipe(debounceTime(250), takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
-      this.filters.search = value.trim();
-      this.load();
-    });
+    // Search, filters, sorting and paging all funnel through the query store.
+    this.q.changed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
     // Scheduling or completing an interview can move a job along the pipeline.
     this.store.jobsChanged$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
     this.load();
@@ -315,13 +311,12 @@ export class AppComponent {
     return formatSalary(job.salary);
   }
 
-  private activeFilters() {
-    // The status filter only applies to the table; the board already has a column per status.
-    return { ...this.filters, status: this.layout() === 'table' ? this.filters.status : '' };
+  priorityColor(priority: Priority | undefined): string {
+    return PRIORITY_COLORS[priority ?? 'Medium'];
   }
 
   private hasFilters(): boolean {
-    return Object.values(this.activeFilters()).some(Boolean);
+    return this.q.activeCount() > 0;
   }
 
   emptyTitle(): string {
@@ -339,15 +334,21 @@ export class AppComponent {
   }
 
   load(): void {
+    const seq = ++this.loadSeq; // a slower, older response must not overwrite a newer one
     this.loading.set(true);
-    this.api.list({ view: this.view(), ...this.activeFilters(), ...this.sort }).subscribe({
-      next: (jobs) => {
-        this.jobs.set(jobs);
+    this.api.search({ view: this.view(), ...this.q.params() }).subscribe({
+      next: (result) => {
+        if (seq !== this.loadSeq) return;
+        this.jobs.set(result.items);
+        this.q.applyResult(result);
         this.error.set('');
         this.loading.set(false);
         this.jobsVersion.update((v) => v + 1);
+        this.refreshOutsideJob(result.items);
       },
-      error: () => this.fail('Could not load jobs. Check that the API is running on port 3000.')
+      error: () => {
+        if (seq === this.loadSeq) this.fail('Could not load jobs. Check that the API is running on port 3000.');
+      }
     });
     this.api.stats().subscribe({ next: (s) => this.stats.set(s), error: () => undefined });
   }
@@ -355,22 +356,11 @@ export class AppComponent {
   setLayout(layout: Layout): void {
     this.layout.set(layout);
     try { localStorage.setItem('job-tracker:layout', layout); } catch { /* storage unavailable */ }
-    this.load();
   }
 
   setView(view: JobView): void {
     this.view.set(view);
-    this.load();
-  }
-
-  setFilter(key: 'status' | 'workMode' | 'employmentType' | 'experienceLevel', value: string): void {
-    this.filters[key] = value;
-    this.load();
-  }
-
-  setSort(value: string): void {
-    const [sort, order] = value.split(':');
-    this.sort = { sort, order: order as 'asc' | 'desc' };
+    this.q.page.set(1);
     this.load();
   }
 
@@ -382,10 +372,24 @@ export class AppComponent {
   }
 
   /** Opens a job's sheet from the dashboard, switching list if the job is archived. */
-  openJobById(id: string, archived: boolean): void {
-    const wanted: JobView = archived ? 'archived' : 'active';
-    if (this.view() !== wanted && !this.jobs().some((j) => j._id === id)) this.setView(wanted);
+  openJobById(id: string): void {
     this.selectedId.set(id);
+    if (this.jobs().some((j) => j._id === id)) return;
+    // Filters or paging may hide the job, so fetch it directly instead of changing what the list shows.
+    this.api.get(id).subscribe({
+      next: (job) => this.outsideJob.set(job),
+      error: () => {
+        this.selectedId.set(null);
+        this.fail('That job could not be found. It may have been deleted.');
+      }
+    });
+  }
+
+  /** Keeps a job opened from outside the current page up to date after changes. */
+  private refreshOutsideJob(items: Job[]): void {
+    const outside = this.outsideJob();
+    if (!outside || this.selectedId() !== outside._id || items.some((j) => j._id === outside._id)) return;
+    this.api.get(outside._id).subscribe({ next: (job) => this.outsideJob.set(job), error: () => this.outsideJob.set(null) });
   }
 
   endDrag(): void {
@@ -421,7 +425,12 @@ export class AppComponent {
   changeStatus(job: Job, status: JobStatus, note = ''): void {
     if (job.status === status) return;
     const before = this.jobs();
+    const countsBefore = this.q.statusCounts();
     const now = new Date().toISOString();
+    const counts = { ...countsBefore };
+    counts[job.status] = Math.max(0, (counts[job.status] ?? 0) - 1);
+    counts[status] = (counts[status] ?? 0) + 1;
+    this.q.statusCounts.set(counts);
 
     // Update the screen right away, then confirm with the server.
     this.jobs.update((list) =>
@@ -440,6 +449,7 @@ export class AppComponent {
     this.api.setStatus(job._id, status, note).subscribe({
       next: (saved) => {
         this.jobs.update((list) => list.map((j) => (j._id === saved._id ? saved : j)));
+        if (this.outsideJob()?._id === saved._id) this.outsideJob.set(saved);
         this.error.set('');
         this.jobsVersion.update((v) => v + 1);
         if (saved.cancelledEvents) {
@@ -449,6 +459,7 @@ export class AppComponent {
       },
       error: () => {
         this.jobs.set(before);
+        this.q.statusCounts.set(countsBefore);
         this.fail(`Could not move "${job.title}" to ${status}. It was put back where it was.`);
       }
     });

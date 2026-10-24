@@ -3,6 +3,7 @@ const { Schema, model } = require('mongoose');
 const WORK_MODES = ['Remote', 'Hybrid', 'On-site'];
 const EMPLOYMENT_TYPES = ['Full-time', 'Contract', 'Internship'];
 const EXPERIENCE_LEVELS = ['Entry', 'Junior', 'Mid', 'Senior', 'Lead', 'Principal'];
+const PRIORITIES = ['High', 'Medium', 'Low'];
 const STATUSES = [
   'Saved / Interested',
   'Applied',
@@ -13,6 +14,9 @@ const STATUSES = [
   'Rejected',
   'Withdrawn'
 ];
+
+// Stages that mean an application has been submitted (used to stamp appliedAt).
+const APPLIED_STAGES = ['Applied', 'Assessment', 'Interview Scheduled', 'Interview Completed', 'Offer Received'];
 
 const isHttpUrl = (value) => {
   if (!value) return true;
@@ -109,7 +113,10 @@ const jobSchema = new Schema(
     },
     skills: { type: [String], set: normalizeSkills, default: [] },
     recruiter: { type: recruiterSchema, default: () => ({}) },
+    priority: { type: String, enum: { values: PRIORITIES, message: 'Priority must be High, Medium or Low' }, default: 'Medium' },
     status: { type: String, enum: { values: STATUSES, message: 'Unknown status' }, default: STATUSES[0] },
+    // When the application was submitted. Set automatically the first time the job reaches an applied stage; it can also be edited.
+    appliedAt: { type: Date },
     statusChangedAt: { type: Date, default: Date.now },
     statusHistory: { type: [statusChangeSchema], default: [] },
     isFavorite: { type: Boolean, default: false },
@@ -121,6 +128,7 @@ const jobSchema = new Schema(
 jobSchema.index({ isArchived: 1, dateSaved: -1 });
 jobSchema.index({ isFavorite: 1 });
 jobSchema.index({ status: 1 });
+jobSchema.index({ appliedAt: -1 });
 
 // Moves the job to a new status and records it in the history. Returns false when nothing changed.
 jobSchema.methods.changeStatus = function changeStatus(next, note) {
@@ -129,6 +137,7 @@ jobSchema.methods.changeStatus = function changeStatus(next, note) {
   this.statusHistory.push({ from: this.status, to: next, changedAt: now, note: note || undefined });
   this.status = next;
   this.statusChangedAt = now;
+  if (APPLIED_STAGES.includes(next) && !this.appliedAt) this.appliedAt = now;
   return true;
 };
 
@@ -137,6 +146,7 @@ jobSchema.pre('validate', async function seedHistory() {
   if (this.isNew && this.statusHistory.length === 0) {
     this.statusHistory.push({ from: null, to: this.status, changedAt: this.dateSaved || new Date(), note: 'Job saved' });
   }
+  if (this.isNew && !this.appliedAt && APPLIED_STAGES.includes(this.status)) this.appliedAt = this.dateSaved || new Date();
 });
 
 module.exports = model('Job', jobSchema);
@@ -144,3 +154,5 @@ module.exports.WORK_MODES = WORK_MODES;
 module.exports.EMPLOYMENT_TYPES = EMPLOYMENT_TYPES;
 module.exports.EXPERIENCE_LEVELS = EXPERIENCE_LEVELS;
 module.exports.STATUSES = STATUSES;
+module.exports.PRIORITIES = PRIORITIES;
+module.exports.APPLIED_STAGES = APPLIED_STAGES;

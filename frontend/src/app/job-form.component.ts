@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
-  CURRENCIES, EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, Job, JobInput, STATUSES, WORK_MODES
+  CURRENCIES, EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, Job, JobInput, PRIORITIES, STATUSES, WORK_MODES
 } from './job.model';
 import { JobService } from './job.service';
 
@@ -59,13 +59,21 @@ import { JobService } from './job.service';
               </select>
             </label>
           </div>
-          <label class="field">
-            <span>Status</span>
-            <select formControlName="status">
-              @for (st of statuses; track st) { <option [value]="st">{{ st }}</option> }
-            </select>
-            @if (job()) { <small class="hint">Changing the status adds an entry to this job's history.</small> }
-          </label>
+          <div class="grid two">
+            <label class="field">
+              <span>Status</span>
+              <select formControlName="status">
+                @for (st of statuses; track st) { <option [value]="st">{{ st }}</option> }
+              </select>
+              @if (job()) { <small class="hint">Changing the status adds an entry to this job's history.</small> }
+            </label>
+            <label class="field">
+              <span>Priority</span>
+              <select formControlName="priority">
+                @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
+              </select>
+            </label>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -81,6 +89,11 @@ import { JobService } from './job.service';
               <input formControlName="dateSaved" type="date" />
             </label>
           </div>
+          <label class="field">
+            <span>Date applied</span>
+            <input formControlName="appliedAt" type="date" />
+            <small class="hint">Filled in automatically when the job moves to Applied. Set it here if you applied earlier.</small>
+          </label>
           <label class="field">
             <span>Job description</span>
             <textarea formControlName="description" rows="5"></textarea>
@@ -163,6 +176,7 @@ export class JobFormComponent implements OnInit {
   readonly levels = EXPERIENCE_LEVELS;
   readonly currencies = CURRENCIES;
   readonly statuses = STATUSES;
+  readonly priorities = PRIORITIES;
 
   readonly saving = signal(false);
   readonly formError = signal('');
@@ -176,8 +190,10 @@ export class JobFormComponent implements OnInit {
     employmentType: ['Full-time'],
     experienceLevel: ['Mid'],
     status: ['Saved / Interested'],
+    priority: ['Medium'],
     postingUrl: [''],
     dateSaved: [new Date().toISOString().slice(0, 10)],
+    appliedAt: [''],
     description: [''],
     skills: [''],
     currency: ['USD'],
@@ -202,6 +218,8 @@ export class JobFormComponent implements OnInit {
       status: j.status ?? 'Saved / Interested',
       postingUrl: j.postingUrl ?? '',
       dateSaved: j.dateSaved ? j.dateSaved.slice(0, 10) : '',
+      priority: j.priority ?? 'Medium',
+      appliedAt: j.appliedAt ? j.appliedAt.slice(0, 10) : '',
       description: j.description ?? '',
       skills: (j.skills ?? []).join(', '),
       currency: j.salary?.currency ?? 'USD',
@@ -237,6 +255,8 @@ export class JobFormComponent implements OnInit {
       employmentType: v.employmentType as JobInput['employmentType'],
       experienceLevel: v.experienceLevel as JobInput['experienceLevel'],
       status: v.status as JobInput['status'],
+      priority: v.priority as JobInput['priority'],
+      appliedAt: v.appliedAt ? new Date(v.appliedAt).toISOString() : null,
       postingUrl: v.postingUrl.trim(),
       dateSaved: v.dateSaved ? new Date(v.dateSaved).toISOString() : new Date().toISOString(),
       description: v.description.trim(),

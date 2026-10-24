@@ -2,20 +2,18 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Job = require('../models/Job');
 const Event = require('../models/Event');
+const { buildSearch } = require('../lib/job-search');
 
 const router = express.Router();
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Only these fields can be written by clients (prevents mass assignment).
 const EDITABLE = [
   'company', 'title', 'location', 'workMode', 'employmentType', 'experienceLevel',
-  'description', 'postingUrl', 'dateSaved', 'salary', 'skills', 'recruiter'
+  'description', 'postingUrl', 'dateSaved', 'salary', 'skills', 'recruiter', 'priority', 'appliedAt'
 ];
 const pick = (body) => Object.fromEntries(EDITABLE.filter((k) => k in body).map((k) => [k, body[k]]));
-
-const SORTABLE = { dateSaved: 'dateSaved', company: 'company', title: 'title', updatedAt: 'updatedAt' };
 
 // Withdrawing from a job means its upcoming interviews, calls and follow-ups no longer apply.
 async function cancelOpenEvents(job) {
@@ -42,28 +40,47 @@ router.get('/stats', wrap(async (req, res) => {
   res.json({ active, favorites, archived });
 }));
 
-// GET /api/jobs?view=active|favorites|archived|all&search=&workMode=&employmentType=&experienceLevel=&sort=&order=
+// GET /api/jobs?view=&search=&status=&priority=&location=&workMode=&employmentType=&experienceLevel=
+//               &appliedFrom=&appliedTo=&interviewFrom=&interviewTo=&sort=&order=&page=&limit=
+// Without page/limit this returns an array of every match. With them it returns one page:
+// { items, total, page, pageSize, pages, statusCounts } where statusCounts covers all matches, not just the page.
+// See lib/job-search.js for what each parameter does.
 router.get('/', wrap(async (req, res) => {
-  const { view = 'active', search, status, workMode, employmentType, experienceLevel, sort = 'dateSaved', order = 'desc' } = req.query;
-  const filter = {};
+  const search = buildSearch(req.query, { eventsCollection: Event.collection.name });
+  const run = (tail) => Job.aggregate([...search.stages, ...tail]).collation({ locale: 'en', strength: 2 });
 
-  if (view === 'active') filter.isArchived = false;
-  else if (view === 'favorites') Object.assign(filter, { isArchived: false, isFavorite: true });
-  else if (view === 'archived') filter.isArchived = true;
+  if (!search.paged) return res.json(await run([search.cleanup]));
 
-  if (status) filter.status = status;
-  if (workMode) filter.workMode = workMode;
-  if (employmentType) filter.employmentType = employmentType;
-  if (experienceLevel) filter.experienceLevel = experienceLevel;
+  const { limit } = search;
+  const fetchPage = async (page) => {
+    const [out] = await run([
+      {
+        $facet: {
+          items: [{ $skip: (page - 1) * limit }, { $limit: limit }, search.cleanup],
+          total: [{ $count: 'n' }],
+          byStatus: [{ $group: { _id: '$status', n: { $sum: 1 } } }]
+        }
+      }
+    ]);
+    return out;
+  };
 
-  if (search && String(search).trim()) {
-    const rx = new RegExp(escapeRegex(String(search).trim()), 'i');
-    filter.$or = [{ company: rx }, { title: rx }, { location: rx }, { skills: rx }, { 'recruiter.name': rx }];
+  let page = search.page;
+  let out = await fetchPage(page);
+  const total = out.total[0] ? out.total[0].n : 0;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if (page > pages) {
+    page = pages; // e.g. the last item on the last page was deleted
+    out = await fetchPage(page);
   }
-
-  const sortField = SORTABLE[sort] || 'dateSaved';
-  const jobs = await Job.find(filter).sort({ [sortField]: order === 'asc' ? 1 : -1 });
-  res.json(jobs);
+  res.json({
+    items: out.items,
+    total,
+    page,
+    pageSize: limit,
+    pages,
+    statusCounts: Object.fromEntries(out.byStatus.map((r) => [r._id, r.n]))
+  });
 }));
 
 router.get('/:id', wrap(async (req, res) => {

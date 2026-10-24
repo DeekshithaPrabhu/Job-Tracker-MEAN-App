@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { EVENT_COLORS, JobEvent, eventLabel, isActive } from './event.model';
-import { Job, JobStatus, STATUSES, STATUS_COLORS, formatSalary } from './job.model';
+import { Job, JobStatus, PRIORITY_COLORS, STATUSES, STATUS_COLORS, formatSalary } from './job.model';
 import { ScheduleStore } from './schedule.store';
 
 @Component({
@@ -107,11 +107,14 @@ import { ScheduleStore } from './schedule.store';
           <h3>Details</h3>
           <dl class="kv">
             @if (job().location) { <dt>Location</dt><dd>{{ job().location }}</dd> }
+            <dt>Priority</dt>
+            <dd><span class="chip" [style.--c]="priorityColor()"><span class="prio-dot"></span>{{ job().priority || 'Medium' }}</span></dd>
             <dt>Work mode</dt><dd>{{ job().workMode }}</dd>
             <dt>Employment</dt><dd>{{ job().employmentType }}</dd>
             <dt>Experience</dt><dd>{{ job().experienceLevel }}</dd>
             @if (salary()) { <dt>Salary</dt><dd>{{ salary() }}</dd> }
             <dt>Date saved</dt><dd>{{ job().dateSaved | date: 'd MMM y' }}</dd>
+            @if (job().appliedAt) { <dt>Date applied</dt><dd>{{ job().appliedAt | date: 'd MMM y' }}</dd> }
             @if (job().postingUrl) {
               <dt>Posting</dt>
               <dd><a [href]="job().postingUrl" target="_blank" rel="noopener noreferrer">Open job posting</a></dd>
@@ -172,6 +175,9 @@ export class JobDetailComponent {
   readonly statusChange = output<{ status: JobStatus; note: string }>();
 
   readonly statuses = STATUSES;
+  priorityColor(): string {
+    return PRIORITY_COLORS[this.job().priority ?? 'Medium'];
+  }
   readonly draft = signal<JobStatus | null>(null);
   readonly note = signal('');
 

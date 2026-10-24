@@ -580,3 +580,44 @@ legend { font-weight: 600; font-size: 1.02rem; letter-spacing: -0.02em; padding:
   .row-btn { flex-wrap: wrap; }
   .row-when { text-align: left; padding-left: 22px; }
 }
+
+/* ==========================================================================
+   Search, filters, sorting and paging
+   ========================================================================== */
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.filterbar { max-width: 1680px; margin: 0 auto; padding: 0 28px 4px; display: grid; gap: 10px; }
+.fb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fb-spacer { flex: 1 1 0; }
+.count-badge {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px;
+  border-radius: 99px; background: rgba(255, 255, 255, 0.28); font-size: 0.75rem; font-weight: 700;
+}
+.save-row .pill-input { max-width: 420px; }
+
+.fb-panel {
+  background: var(--surface); border-radius: 20px; padding: 18px 20px; box-shadow: var(--shadow-sm);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 22px;
+}
+.fb-group { display: grid; gap: 8px; align-content: start; border: 0; margin: 0; padding: 0; min-width: 0; }
+.fb-group.wide { grid-column: 1 / -1; }
+.fb-group legend, .fb-label { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 0; }
+.fb-group .pill-input, .fb-group .pill-select { width: 100%; max-width: none; min-width: 0; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.fb-dates { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.prio-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); margin-right: 7px; }
+.chip .prio-dot { margin-right: 0; }
+.chip-toggle.on .prio-dot { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.next-int { color: var(--accent); font-weight: 600; }
+
+.pager {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+  margin-top: 20px; padding: 12px 4px;
+}
+.pager-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pager-size { display: inline-flex; align-items: center; gap: 8px; }
+.pager-size .pill-select { padding-top: 5px; padding-bottom: 5px; }
+@media (max-width: 560px) {
+  .filterbar { padding: 0 16px 4px; }
+  .pager { justify-content: center; }
+}

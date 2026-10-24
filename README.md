@@ -37,19 +37,19 @@ MongoDB + Express + Angular 18 + Node.js. Save every job opportunity, move it th
 - Moving a job to **Withdrawn** automatically cancels its upcoming events (anything Scheduled or Rescheduled), whether you drag the card, use a dropdown, or edit the job. Completed events are left alone, and you can reopen a cancelled event from its detail sheet
 - Scheduling an interview or assessment can move the job along the pipeline (a checkbox on the form), and completing an interview moves "Interview Scheduled" to "Interview Completed"
 
+### Search, filters and sorting (Applications page, board and table)
+
 ### Application status and pipeline
 
 - Eight stages: Saved / Interested, Applied, Assessment, Interview Scheduled, Interview Completed, Offer Received, Rejected, Withdrawn
 - **Board view**: one column per stage; drag a card to another column to update its status (works with mouse and touch)
 - **Table view**: sortable by the toolbar, filterable by status, with an inline status dropdown on every row
 - **Status history**: every change is stored with the previous stage, a timestamp and an optional note, and shown as a timeline in the job's detail sheet
-- Moves update instantly on screen and roll back with a message if the server rejects them
-- Apple-inspired interface: frosted navigation, soft depth, springy hover and press motion, light and dark mode, reduced-motion support
 
 ## Prerequisites
 
 - Node.js 18.19+ (20+ recommended)
-- MongoDB running locally (`mongodb://127.0.0.1:27017`) or a MongoDB Atlas connection string
+- MongoDB Atlas connection string
 
 ## Run it
 
@@ -60,29 +60,38 @@ cp backend/.env.example backend/.env  # edit MONGODB_URI if needed
 npm run dev                         # API on :3000, Angular on :4200
 ```
 
-Open http://localhost:4200. The Angular dev server proxies `/api` to the Express API (`frontend/proxy.conf.json`).
-
-To run the pieces separately: `npm --prefix backend run dev` and `npm --prefix frontend start`.
+Open http://localhost:4200.
 
 ## API
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/jobs` | List jobs. Query: `view` (active, favorites, archived, all), `search`, `status`, `workMode`, `employmentType`, `experienceLevel`, `sort` (dateSaved, company, title, updatedAt), `order` (asc, desc) |
-| GET | `/api/jobs/stats` | Counts for active, favorites, archived |
-| GET | `/api/jobs/:id` | Get one job |
-| POST | `/api/jobs` | Create a job |
-| PUT | `/api/jobs/:id` | Update a job |
-| PATCH | `/api/jobs/:id/status` | Move a job to a new stage and record history (`{ "status": "Applied", "note": "Applied online" }`) |
-| PATCH | `/api/jobs/:id/favorite` | Set or toggle favorite (`{ "value": true }`) |
-| PATCH | `/api/jobs/:id/archive` | Set or toggle archive (`{ "value": true }`) |
-| DELETE | `/api/jobs/:id` | Delete a job |
+| Method | Path                     | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/jobs`              | List jobs. Query: `view` (active, favorites, archived, all), `search`, `status` and `priority` (one value or comma separated), `location`, `workMode`, `employmentType`, `experienceLevel`, `appliedFrom` / `appliedTo` and `interviewFrom` / `interviewTo` (ISO date-times, inclusive), `sort` (dateSaved, company, title, updatedAt, appliedAt, salary, interview), `order` (asc, desc), `page`, `limit` (max 100). Without `page` or `limit` it returns an array of every match; with them it returns `{ items, total, page, pageSize, pages, statusCounts }`. Each job includes `nextInterviewAt` |
+| GET    | `/api/jobs/stats`        | Counts for active, favorites, archived                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| GET    | `/api/jobs/:id`          | Get one job                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| POST   | `/api/jobs`              | Create a job                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| PUT    | `/api/jobs/:id`          | Update a job                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| PATCH  | `/api/jobs/:id/status`   | Move a job to a new stage and record history (`{ "status": "Applied", "note": "Applied online" }`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| PATCH  | `/api/jobs/:id/favorite` | Set or toggle favorite (`{ "value": true }`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| PATCH  | `/api/jobs/:id/archive`  | Set or toggle archive (`{ "value": true }`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| DELETE | `/api/jobs/:id`          | Delete a job                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+### Saved filters API
+
+| Method | Path               | Purpose                                                                                                                                        |
+| ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/filters`     | List saved filters                                                                                                                             |
+| POST   | `/api/filters`     | Save one: `{ "name": "Remote, high priority", "filters": { ... }, "sort": "appliedAt", "order": "desc" }` (names are unique, up to 30 filters) |
+| PUT    | `/api/filters/:id` | Replace what a saved filter applies (and rename it when `name` is sent)                                                                        |
+| DELETE | `/api/filters/:id` | Delete a saved filter                                                                                                                          |
+
+The filter body is cleaned on the server: unknown fields and invalid values are dropped. The search itself is built in `backend/lib/job-search.js`. Salary sorting uses the top of the range (maximum, else minimum) and does not convert currencies. On start-up the API gives existing jobs a Medium priority and an application date taken from their status history.
 
 ### Analytics API
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/analytics` | Everything the dashboard shows in one response. Query: `tz` (IANA time zone used to cut weeks and months, default UTC) |
+| Method | Path             | Purpose                                                                                                                |
+| ------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/analytics` | Everything the dashboard shows in one response. Query: `tz` (IANA time zone used to cut weeks and months, default UTC) |
 
 The response holds `totals`, `rates`, `funnel`, `byStatus`, `series.weeks` / `series.months` (zero-filled), `upcoming`, `overdue`, `nextActions`, `insights` and `recent`.
 
@@ -97,17 +106,17 @@ How the numbers are counted:
 
 ### Events API
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/events` | List events. Query: `job`, `type`, `status`, `scope` (upcoming, past, all), `from`, `to`, `order` |
-| GET | `/api/events/reminders/due` | Reminders whose time has come and that are not dismissed |
-| GET | `/api/events/:id` | Get one event |
-| POST | `/api/events` | Create an event (`reminders` is a list of minutes before; `updateJobStatus` moves the job along) |
-| PUT | `/api/events/:id` | Update an event (a new `startsAt` counts as a reschedule) |
-| POST | `/api/events/:id/reschedule` | `{ startsAt, timeZone, note }` sets a new time, sets status Rescheduled, re-arms reminders |
-| PATCH | `/api/events/:id/status` | `{ status }` where status is Scheduled, Completed, Rescheduled or Cancelled |
-| POST | `/api/events/:id/reminders/:reminderId/dismiss` | Dismiss one reminder |
-| DELETE | `/api/events/:id` | Delete an event |
+| Method | Path                                            | Purpose                                                                                           |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| GET    | `/api/events`                                   | List events. Query: `job`, `type`, `status`, `scope` (upcoming, past, all), `from`, `to`, `order` |
+| GET    | `/api/events/reminders/due`                     | Reminders whose time has come and that are not dismissed                                          |
+| GET    | `/api/events/:id`                               | Get one event                                                                                     |
+| POST   | `/api/events`                                   | Create an event (`reminders` is a list of minutes before; `updateJobStatus` moves the job along)  |
+| PUT    | `/api/events/:id`                               | Update an event (a new `startsAt` counts as a reschedule)                                         |
+| POST   | `/api/events/:id/reschedule`                    | `{ startsAt, timeZone, note }` sets a new time, sets status Rescheduled, re-arms reminders        |
+| PATCH  | `/api/events/:id/status`                        | `{ status }` where status is Scheduled, Completed, Rescheduled or Cancelled                       |
+| POST   | `/api/events/:id/reminders/:reminderId/dismiss` | Dismiss one reminder                                                                              |
+| DELETE | `/api/events/:id`                               | Delete an event                                                                                   |
 
 Times are stored as UTC instants together with the event's time zone, so the same moment is shown correctly wherever you open the app. Deleting a job deletes its events.
 
@@ -126,13 +135,34 @@ Times are stored as UTC instants together with the event's time zone, so the sam
   "dateSaved": "2026-10-24T00:00:00.000Z",
   "salary": { "min": 75000, "max": 95000, "currency": "EUR" },
   "skills": ["Angular", "TypeScript"],
-  "recruiter": { "name": "Mara Keller", "email": "mara@example.com", "phone": "+49 30 1234567", "linkedin": "https://…" },
+  "recruiter": {
+    "name": "Mara Keller",
+    "email": "mara@example.com",
+    "phone": "+49 30 1234567",
+    "linkedin": "https://…"
+  },
   "status": "Interview Scheduled",
+  "priority": "High",
+  "appliedAt": "2026-10-12T09:00:00.000Z",
   "statusChangedAt": "2026-10-20T09:00:00.000Z",
   "statusHistory": [
-    { "from": null, "to": "Saved / Interested", "changedAt": "2026-10-10T09:00:00.000Z", "note": "Job saved" },
-    { "from": "Saved / Interested", "to": "Applied", "changedAt": "2026-10-12T09:00:00.000Z" },
-    { "from": "Applied", "to": "Interview Scheduled", "changedAt": "2026-10-20T09:00:00.000Z", "note": "Intro call on Friday" }
+    {
+      "from": null,
+      "to": "Saved / Interested",
+      "changedAt": "2026-10-10T09:00:00.000Z",
+      "note": "Job saved"
+    },
+    {
+      "from": "Saved / Interested",
+      "to": "Applied",
+      "changedAt": "2026-10-12T09:00:00.000Z"
+    },
+    {
+      "from": "Applied",
+      "to": "Interview Scheduled",
+      "changedAt": "2026-10-20T09:00:00.000Z",
+      "note": "Intro call on Friday"
+    }
   ],
   "isFavorite": false,
   "isArchived": false
@@ -142,9 +172,11 @@ Times are stored as UTC instants together with the event's time zone, so the sam
 ## Structure
 
 ```
-backend/   server.js, models/{Job,Event}.js, routes/{jobs,events,analytics}.js, lib/analytics.js (pure metrics builder)
+backend/   server.js, models/{Job,Event,SavedFilter}.js, routes/{jobs,events,analytics,filters}.js,
+           lib/analytics.js (metrics builder), lib/job-search.js (filter, sort and paging pipeline)
 frontend/  src/app/ app.component, job-*.ts (applications), schedule.component, schedule.store,
            dashboard.component, analytics.{model,service}.ts,
+           job-filters.component, pager.component, job-query.{model,store}.ts (filters, sorting, paging, saved filters),
            event-form / event-detail / event-row / reminders components, time.util.ts, src/styles.css
 ```
 
