@@ -3,6 +3,16 @@ const { Schema, model } = require('mongoose');
 const WORK_MODES = ['Remote', 'Hybrid', 'On-site'];
 const EMPLOYMENT_TYPES = ['Full-time', 'Contract', 'Internship'];
 const EXPERIENCE_LEVELS = ['Entry', 'Junior', 'Mid', 'Senior', 'Lead', 'Principal'];
+const STATUSES = [
+  'Saved / Interested',
+  'Applied',
+  'Assessment',
+  'Interview Scheduled',
+  'Interview Completed',
+  'Offer Received',
+  'Rejected',
+  'Withdrawn'
+];
 
 const isHttpUrl = (value) => {
   if (!value) return true;
@@ -49,6 +59,16 @@ const recruiterSchema = new Schema(
   { _id: false }
 );
 
+const statusChangeSchema = new Schema(
+  {
+    from: { type: String, default: null },
+    to: { type: String, enum: { values: STATUSES, message: 'Unknown status' }, required: true },
+    changedAt: { type: Date, default: Date.now },
+    note: { type: String, trim: true, maxlength: 500 }
+  },
+  { _id: false }
+);
+
 const jobSchema = new Schema(
   {
     company: { type: String, required: [true, 'Company name is required'], trim: true, maxlength: 150 },
@@ -89,6 +109,9 @@ const jobSchema = new Schema(
     },
     skills: { type: [String], set: normalizeSkills, default: [] },
     recruiter: { type: recruiterSchema, default: () => ({}) },
+    status: { type: String, enum: { values: STATUSES, message: 'Unknown status' }, default: STATUSES[0] },
+    statusChangedAt: { type: Date, default: Date.now },
+    statusHistory: { type: [statusChangeSchema], default: [] },
     isFavorite: { type: Boolean, default: false },
     isArchived: { type: Boolean, default: false }
   },
@@ -97,8 +120,27 @@ const jobSchema = new Schema(
 
 jobSchema.index({ isArchived: 1, dateSaved: -1 });
 jobSchema.index({ isFavorite: 1 });
+jobSchema.index({ status: 1 });
+
+// Moves the job to a new status and records it in the history. Returns false when nothing changed.
+jobSchema.methods.changeStatus = function changeStatus(next, note) {
+  if (!next || next === this.status) return false;
+  const now = new Date();
+  this.statusHistory.push({ from: this.status, to: next, changedAt: now, note: note || undefined });
+  this.status = next;
+  this.statusChangedAt = now;
+  return true;
+};
+
+// New jobs start their history with the initial status.
+jobSchema.pre('validate', async function seedHistory() {
+  if (this.isNew && this.statusHistory.length === 0) {
+    this.statusHistory.push({ from: null, to: this.status, changedAt: this.dateSaved || new Date(), note: 'Job saved' });
+  }
+});
 
 module.exports = model('Job', jobSchema);
 module.exports.WORK_MODES = WORK_MODES;
 module.exports.EMPLOYMENT_TYPES = EMPLOYMENT_TYPES;
 module.exports.EXPERIENCE_LEVELS = EXPERIENCE_LEVELS;
+module.exports.STATUSES = STATUSES;

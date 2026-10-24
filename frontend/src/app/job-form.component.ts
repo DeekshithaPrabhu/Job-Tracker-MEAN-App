@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
-  CURRENCIES, EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, Job, JobInput, WORK_MODES
+  CURRENCIES, EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, Job, JobInput, STATUSES, WORK_MODES
 } from './job.model';
 import { JobService } from './job.service';
 
@@ -59,6 +59,13 @@ import { JobService } from './job.service';
               </select>
             </label>
           </div>
+          <label class="field">
+            <span>Status</span>
+            <select formControlName="status">
+              @for (st of statuses; track st) { <option [value]="st">{{ st }}</option> }
+            </select>
+            @if (job()) { <small class="hint">Changing the status adds an entry to this job's history.</small> }
+          </label>
         </fieldset>
 
         <fieldset>
@@ -155,6 +162,7 @@ export class JobFormComponent implements OnInit {
   readonly employmentTypes = EMPLOYMENT_TYPES;
   readonly levels = EXPERIENCE_LEVELS;
   readonly currencies = CURRENCIES;
+  readonly statuses = STATUSES;
 
   readonly saving = signal(false);
   readonly formError = signal('');
@@ -167,6 +175,7 @@ export class JobFormComponent implements OnInit {
     workMode: ['On-site'],
     employmentType: ['Full-time'],
     experienceLevel: ['Mid'],
+    status: ['Saved / Interested'],
     postingUrl: [''],
     dateSaved: [new Date().toISOString().slice(0, 10)],
     description: [''],
@@ -190,6 +199,7 @@ export class JobFormComponent implements OnInit {
       workMode: j.workMode,
       employmentType: j.employmentType,
       experienceLevel: j.experienceLevel,
+      status: j.status ?? 'Saved / Interested',
       postingUrl: j.postingUrl ?? '',
       dateSaved: j.dateSaved ? j.dateSaved.slice(0, 10) : '',
       description: j.description ?? '',
@@ -226,6 +236,7 @@ export class JobFormComponent implements OnInit {
       workMode: v.workMode as JobInput['workMode'],
       employmentType: v.employmentType as JobInput['employmentType'],
       experienceLevel: v.experienceLevel as JobInput['experienceLevel'],
+      status: v.status as JobInput['status'],
       postingUrl: v.postingUrl.trim(),
       dateSaved: v.dateSaved ? new Date(v.dateSaved).toISOString() : new Date().toISOString(),
       description: v.description.trim(),

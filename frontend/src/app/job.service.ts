@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Job, JobInput, JobQuery, JobStats } from './job.model';
+import { Job, JobInput, JobQuery, JobStats, JobStatus } from './job.model';
 
 @Injectable({ providedIn: 'root' })
 export class JobService {
@@ -26,6 +26,10 @@ export class JobService {
 
   update(id: string, job: JobInput): Observable<Job> {
     return this.http.put<Job>(`${this.base}/${id}`, job);
+  }
+
+  setStatus(id: string, status: JobStatus, note = ''): Observable<Job> {
+    return this.http.patch<Job>(`${this.base}/${id}/status`, { status, note });
   }
 
   setFavorite(id: string, value: boolean): Observable<Job> {
