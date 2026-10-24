@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
+import { DashboardComponent } from './dashboard.component';
 import { EventDetailComponent } from './event-detail.component';
 import { EventFormComponent } from './event-form.component';
 import { JobDetailComponent } from './job-detail.component';
@@ -17,24 +18,25 @@ import { ScheduleComponent } from './schedule.component';
 import { ScheduleStore } from './schedule.store';
 
 type Layout = 'board' | 'table';
-type Page = 'applications' | 'schedule';
+type Page = 'dashboard' | 'applications' | 'schedule';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
     DatePipe, CdkDropListGroup, CdkDropList, CdkDrag, JobFormComponent, JobDetailComponent,
-    ScheduleComponent, EventFormComponent, EventDetailComponent, RemindersComponent
+    ScheduleComponent, DashboardComponent, EventFormComponent, EventDetailComponent, RemindersComponent
   ],
   template: `
     <header class="nav">
       <div class="nav-inner">
         <span class="brand">Job tracker</span>
         <nav class="segmented" aria-label="Pages">
+          <button type="button" [class.on]="page() === 'dashboard'" [attr.aria-current]="page() === 'dashboard' ? 'page' : null" (click)="setPage('dashboard')">Dashboard</button>
           <button type="button" [class.on]="page() === 'applications'" [attr.aria-current]="page() === 'applications' ? 'page' : null" (click)="setPage('applications')">Applications</button>
           <button type="button" [class.on]="page() === 'schedule'" [attr.aria-current]="page() === 'schedule' ? 'page' : null" (click)="setPage('schedule')">Schedule</button>
         </nav>
-        @if (page() === 'applications') {
+        @if (page() !== 'schedule') {
           <button type="button" class="btn primary" (click)="openForm(null)">Save a job</button>
         } @else {
           <button type="button" class="btn primary" (click)="store.openForm()">Schedule event</button>
@@ -210,8 +212,14 @@ type Page = 'applications' | 'schedule';
           }
         }
       </main>
-    } @else {
+    } @else if (page() === 'schedule') {
       <app-schedule />
+    } @else {
+      <app-dashboard
+        [refreshKey]="jobsVersion()"
+        (openJob)="openJobById($event.id, $event.archived)"
+        (goto)="setPage($event)"
+        (saveJob)="openForm(null)" />
     }
 
     @if (selected(); as job) {
@@ -258,7 +266,9 @@ export class AppComponent {
   readonly jobs = signal<Job[]>([]);
   readonly stats = signal<JobStats>({ active: 0, favorites: 0, archived: 0 });
   readonly view = signal<JobView>('active');
-  readonly page = signal<Page>('applications');
+  readonly page = signal<Page>('dashboard');
+  /** Bumped whenever job data is reloaded or changed, so the dashboard refreshes its numbers. */
+  readonly jobsVersion = signal(0);
   readonly layout = signal<Layout>(this.savedLayout());
   readonly loading = signal(false);
   readonly error = signal('');
@@ -335,6 +345,7 @@ export class AppComponent {
         this.jobs.set(jobs);
         this.error.set('');
         this.loading.set(false);
+        this.jobsVersion.update((v) => v + 1);
       },
       error: () => this.fail('Could not load jobs. Check that the API is running on port 3000.')
     });
@@ -368,6 +379,13 @@ export class AppComponent {
   select(job: Job): void {
     if (this.dragging) return;
     this.selectedId.set(job._id);
+  }
+
+  /** Opens a job's sheet from the dashboard, switching list if the job is archived. */
+  openJobById(id: string, archived: boolean): void {
+    const wanted: JobView = archived ? 'archived' : 'active';
+    if (this.view() !== wanted && !this.jobs().some((j) => j._id === id)) this.setView(wanted);
+    this.selectedId.set(id);
   }
 
   endDrag(): void {
@@ -423,6 +441,7 @@ export class AppComponent {
       next: (saved) => {
         this.jobs.update((list) => list.map((j) => (j._id === saved._id ? saved : j)));
         this.error.set('');
+        this.jobsVersion.update((v) => v + 1);
         if (saved.cancelledEvents) {
           this.store.load();
           this.announceCancelled(saved);

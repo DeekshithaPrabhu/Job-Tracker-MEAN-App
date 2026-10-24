@@ -12,6 +12,17 @@ MongoDB + Express + Angular 18 + Node.js. Save every job opportunity, move it th
 - Edit, delete, archive/restore, and favorite
 - Search, filters (work mode, type, level), sorting, and Active / Favorites / Archived lists
 
+### Dashboard and job search analytics (Dashboard page, the landing page)
+
+- **Summary cards**: saved jobs, applications submitted (and how many in the last 7 days), upcoming interviews (with the next one), overdue follow-ups, offers received (and how many are still open), and rejections
+- **Progress over time**: grouped bar chart of jobs saved, applications submitted and interviews, by week (last 12) or by month (last 6). Hover a group for the exact numbers
+- **Applications by status**: one bar per pipeline stage, plus a conversion strip (Saved, Applied, Interviewed, Offers) with the percentage that moves on from each step
+- **Where to focus**: plain-language hints that point at the weak spots, for example no applications this week, applications with no reply for 14+ days, saved jobs left untouched, overdue follow-ups, few interviews per application, or interviews that are not turning into offers
+- **Next actions**: a prioritised list (reply to offers, late follow-ups, events to update, interview prep, check-ins on silent applications, saved jobs to apply to or archive). Click an item to open the event or job
+- **Interviews and follow-ups**: overdue items first, then what is coming up
+- **Recent activity**: the latest status changes, new jobs and completed events
+- The page refreshes itself when jobs or events change. Weeks start on Monday and are cut in your own time zone
+
 ### Interviews and follow-ups (Schedule page)
 
 - Five event types: Interview, Recruiter Call, Assessment, Follow-up, Check-in
@@ -67,6 +78,23 @@ To run the pieces separately: `npm --prefix backend run dev` and `npm --prefix f
 | PATCH | `/api/jobs/:id/archive` | Set or toggle archive (`{ "value": true }`) |
 | DELETE | `/api/jobs/:id` | Delete a job |
 
+### Analytics API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/analytics` | Everything the dashboard shows in one response. Query: `tz` (IANA time zone used to cut weeks and months, default UTC) |
+
+The response holds `totals`, `rates`, `funnel`, `byStatus`, `series.weeks` / `series.months` (zero-filled), `upcoming`, `overdue`, `nextActions`, `insights` and `recent`.
+
+How the numbers are counted:
+
+- **Application submitted**: a job that reached Applied or any later active stage (Assessment, Interview Scheduled, Interview Completed, Offer Received). A job rejected or withdrawn before it was applied to is not an application. The date used for the charts is the first time it reached one of those stages.
+- **Interviewed**: the job reached an interview stage, or it has an Interview event that was not cancelled.
+- **Offers received**: jobs that ever reached Offer Received; **open offers** are those still in that stage. **Rejections** are jobs currently in Rejected.
+- **Overdue follow-up**: a Follow-up or Check-in that is still Scheduled or Rescheduled and whose time has passed. Other events that have passed but were never closed are counted separately as "events to update".
+- Archived jobs stay in the totals and charts (they are part of your history) but never create upcoming items or next actions. Jobs in Rejected or Withdrawn are left out of upcoming items and next actions too.
+- Thresholds (14 days without a reply, 7 days for saved jobs, and so on) are constants at the top of `backend/lib/analytics.js`.
+
 ### Events API
 
 | Method | Path | Purpose |
@@ -114,8 +142,9 @@ Times are stored as UTC instants together with the event's time zone, so the sam
 ## Structure
 
 ```
-backend/   server.js, models/{Job,Event}.js, routes/{jobs,events}.js
+backend/   server.js, models/{Job,Event}.js, routes/{jobs,events,analytics}.js, lib/analytics.js (pure metrics builder)
 frontend/  src/app/ app.component, job-*.ts (applications), schedule.component, schedule.store,
+           dashboard.component, analytics.{model,service}.ts,
            event-form / event-detail / event-row / reminders components, time.util.ts, src/styles.css
 ```
 
@@ -128,4 +157,5 @@ frontend/  src/app/ app.component, job-*.ts (applications), schedule.component, 
 - Cards keep their order by date saved (or the sort you pick); dragging only changes the column.
 - Reminders work while the app is open in a browser tab: it checks every minute, and the server remembers which ones you dismissed. There is no email or push delivery when the app is closed; that would need a mail service or push provider.
 - The Schedule page loads all of your events at once and builds the calendar in the browser, which is plenty for a personal job search.
+- The dashboard charts are drawn with plain SVG, so there is no charting library to install. All metrics are computed on the server in `lib/analytics.js` from the jobs' status history and the events, so they can be tested without a database.
 - Next steps if you want to extend it: email reminders, calendar (.ics) export, user accounts with JWT.

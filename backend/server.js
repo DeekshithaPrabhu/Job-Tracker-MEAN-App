@@ -4,11 +4,12 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const jobRoutes = require("./routes/jobs");
 const eventRoutes = require("./routes/events");
+const analyticsRoutes = require("./routes/analytics");
 const Job = require("./models/Job");
 const { STATUSES } = Job;
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
@@ -17,6 +18,7 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/jobs", jobRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Route not found" }));
 
