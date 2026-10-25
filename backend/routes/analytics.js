@@ -13,10 +13,10 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 // `tz` (an IANA zone) decides which calendar day an event falls on for the weekly and monthly charts.
 router.get('/', wrap(async (req, res) => {
   const [jobs, events] = await Promise.all([
-    Job.find()
+    Job.find({ user: req.user._id })
       .select('company title status statusChangedAt statusHistory dateSaved createdAt isArchived')
       .lean(),
-    Event.find()
+    Event.find({ user: req.user._id })
       .select('job type round title startsAt timeZone status completedAt')
       .populate({ path: 'job', select: 'company title status isArchived' })
       .lean()

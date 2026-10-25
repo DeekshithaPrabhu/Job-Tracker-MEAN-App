@@ -63,6 +63,48 @@ const recruiterSchema = new Schema(
   { _id: false }
 );
 
+const CONTACT_ROLES = ['Recruiter', 'Hiring manager', 'Referral', 'Other'];
+const MAX_CONTACTS = 30;
+const MAX_DOCUMENTS = 20;
+const emailOk = (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+// People connected to an application: recruiters, hiring managers, referrals.
+const contactSchema = new Schema(
+  {
+    name: { type: String, required: [true, 'Enter a name'], trim: true, maxlength: [120, 'Use 120 characters or fewer'] },
+    role: { type: String, enum: { values: CONTACT_ROLES, message: 'Role must be Recruiter, Hiring manager, Referral or Other' }, default: 'Recruiter' },
+    company: { type: String, trim: true, maxlength: 150 },
+    email: { type: String, trim: true, lowercase: true, maxlength: 254, validate: { validator: emailOk, message: 'Email is not valid' } },
+    phone: { type: String, trim: true, maxlength: 40 },
+    linkedin: { type: String, trim: true, maxlength: 500, validate: { validator: isHttpUrl, message: 'Profile link must start with http:// or https://' } },
+    notes: { type: String, trim: true, maxlength: [2000, 'Use 2000 characters or fewer'] }
+  },
+  { timestamps: true }
+);
+
+// A link, or a file stored by this server. storageKey is internal and never sent to the browser.
+const documentSchema = new Schema(
+  {
+    kind: { type: String, enum: ['link', 'file'], required: true },
+    title: { type: String, required: [true, 'Enter a title'], trim: true, maxlength: [150, 'Use 150 characters or fewer'] },
+    url: { type: String, trim: true, maxlength: 2000, validate: { validator: isHttpUrl, message: 'Link must start with http:// or https://' } },
+    fileName: { type: String, maxlength: 150 },
+    mimeType: { type: String, maxlength: 100 },
+    size: { type: Number, min: 0 },
+    storageKey: { type: String, maxlength: 64 },
+    addedAt: { type: Date, default: Date.now }
+  },
+  {
+    _id: true,
+    toJSON: {
+      transform: (doc, ret) => {
+        delete ret.storageKey;
+        return ret;
+      }
+    }
+  }
+);
+
 const statusChangeSchema = new Schema(
   {
     from: { type: String, default: null },
@@ -75,6 +117,7 @@ const statusChangeSchema = new Schema(
 
 const jobSchema = new Schema(
   {
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     company: { type: String, required: [true, 'Company name is required'], trim: true, maxlength: 150 },
     title: { type: String, required: [true, 'Job title is required'], trim: true, maxlength: 150 },
     location: { type: String, trim: true, maxlength: 150 },
@@ -117,6 +160,18 @@ const jobSchema = new Schema(
     status: { type: String, enum: { values: STATUSES, message: 'Unknown status' }, default: STATUSES[0] },
     // When the application was submitted. Set automatically the first time the job reaches an applied stage; it can also be edited.
     appliedAt: { type: Date },
+    companyNotes: { type: String, maxlength: [10000, 'Use 10,000 characters or fewer'] },
+    recruiterNotes: { type: String, maxlength: [10000, 'Use 10,000 characters or fewer'] },
+    contacts: {
+      type: [contactSchema],
+      default: [],
+      validate: { validator: (v) => v.length <= MAX_CONTACTS, message: `You can keep up to ${MAX_CONTACTS} contacts per job` }
+    },
+    documents: {
+      type: [documentSchema],
+      default: [],
+      validate: { validator: (v) => v.length <= MAX_DOCUMENTS, message: `You can attach up to ${MAX_DOCUMENTS} documents or links per job` }
+    },
     statusChangedAt: { type: Date, default: Date.now },
     statusHistory: { type: [statusChangeSchema], default: [] },
     isFavorite: { type: Boolean, default: false },
@@ -125,6 +180,7 @@ const jobSchema = new Schema(
   { timestamps: true }
 );
 
+jobSchema.index({ user: 1, isArchived: 1, dateSaved: -1 });
 jobSchema.index({ isArchived: 1, dateSaved: -1 });
 jobSchema.index({ isFavorite: 1 });
 jobSchema.index({ status: 1 });
@@ -155,4 +211,6 @@ module.exports.EMPLOYMENT_TYPES = EMPLOYMENT_TYPES;
 module.exports.EXPERIENCE_LEVELS = EXPERIENCE_LEVELS;
 module.exports.STATUSES = STATUSES;
 module.exports.PRIORITIES = PRIORITIES;
+module.exports.CONTACT_ROLES = CONTACT_ROLES;
+module.exports.MAX_DOCUMENTS = MAX_DOCUMENTS;
 module.exports.APPLIED_STAGES = APPLIED_STAGES;

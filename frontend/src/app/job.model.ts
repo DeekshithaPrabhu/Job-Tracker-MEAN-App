@@ -2,6 +2,7 @@ export const WORK_MODES = ['Remote', 'Hybrid', 'On-site'] as const;
 export const EMPLOYMENT_TYPES = ['Full-time', 'Contract', 'Internship'] as const;
 export const EXPERIENCE_LEVELS = ['Entry', 'Junior', 'Mid', 'Senior', 'Lead', 'Principal'] as const;
 export const PRIORITIES = ['High', 'Medium', 'Low'] as const;
+export const CONTACT_ROLES = ['Recruiter', 'Hiring manager', 'Referral', 'Other'] as const;
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD'] as const;
 
 export const STATUSES = [
@@ -20,6 +21,7 @@ export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 export type JobStatus = (typeof STATUSES)[number];
 export type Priority = (typeof PRIORITIES)[number];
+export type ContactRole = (typeof CONTACT_ROLES)[number];
 export type JobView = 'active' | 'favorites' | 'archived';
 
 /** Apple system colors, one per pipeline stage. */
@@ -39,6 +41,32 @@ export const PRIORITY_COLORS: Record<Priority, string> = {
   Medium: '#ff9500',
   Low: '#8e8e93'
 };
+
+/** A person connected to an application: a recruiter, hiring manager or referral. */
+export interface Contact {
+  _id: string;
+  name: string;
+  role: ContactRole;
+  company?: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  notes?: string;
+}
+
+export type ContactInput = Omit<Contact, '_id'>;
+
+/** A link, or a file stored on the server (download it through the API; the server path is never exposed). */
+export interface JobDocument {
+  _id: string;
+  kind: 'link' | 'file';
+  title: string;
+  url?: string;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  addedAt: string;
+}
 
 export interface StatusChange {
   from: JobStatus | null;
@@ -80,6 +108,11 @@ export interface Job {
   appliedAt?: string | null;
   /** Start of the next upcoming Interview event, added by the API when listing jobs. */
   nextInterviewAt?: string | null;
+  /** Personal notes. Saved from the Notes tab. */
+  companyNotes?: string;
+  recruiterNotes?: string;
+  contacts?: Contact[];
+  documents?: JobDocument[];
   statusChangedAt?: string;
   statusHistory: StatusChange[];
   /** Set by the API when a status change cancelled upcoming events (withdrawing from a job). */
@@ -92,7 +125,8 @@ export interface Job {
 
 export type JobInput = Omit<
   Job,
-  '_id' | 'isFavorite' | 'isArchived' | 'createdAt' | 'updatedAt' | 'statusChangedAt' | 'statusHistory' | 'nextInterviewAt'
+  '_id' | 'isFavorite' | 'isArchived' | 'createdAt' | 'updatedAt' | 'statusChangedAt' | 'statusHistory' | 'nextInterviewAt' |
+  'companyNotes' | 'recruiterNotes' | 'contacts' | 'documents'
 >;
 
 export interface JobQuery {

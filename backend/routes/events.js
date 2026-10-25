@@ -37,7 +37,7 @@ const PIPELINE_RULES = {
 async function advanceJob(event, trigger) {
   const rule = PIPELINE_RULES[trigger][event.type];
   if (!rule) return null;
-  const job = await Job.findById(event.job._id || event.job);
+  const job = await Job.findOne({ _id: event.job._id || event.job, user: event.user });
   if (!job || !rule.from.includes(job.status)) return null;
   const what = event.round ? `${event.round} ${event.type.toLowerCase()}` : event.type.toLowerCase();
   job.changeStatus(rule.to, `${what.charAt(0).toUpperCase()}${what.slice(1)} ${trigger}`);
@@ -52,6 +52,7 @@ router.get('/reminders/due', wrap(async (req, res) => {
   const now = Date.now();
   const events = await withJob(
     Event.find({
+      user: req.user._id,
       status: { $in: Event.ACTIVE_STATUSES },
       startsAt: { $gte: new Date(now - GRACE_MS), $lte: new Date(now + MAX_LEAD_MS) },
       'reminders.dismissedAt': null
@@ -76,7 +77,7 @@ router.get('/reminders/due', wrap(async (req, res) => {
 // GET /api/events?job=&type=&status=&scope=upcoming|past|all&from=&to=&order=asc|desc
 router.get('/', wrap(async (req, res) => {
   const { job, type, status, scope = 'all', from, to, order } = req.query;
-  const filter = {};
+  const filter = { user: req.user._id };
   if (job) {
     if (!mongoose.isValidObjectId(job)) return res.status(400).json({ message: 'Invalid job id' });
     filter.job = job;
@@ -102,7 +103,7 @@ router.get('/', wrap(async (req, res) => {
 }));
 
 router.get('/:id', wrap(async (req, res) => {
-  const event = await withJob(Event.findById(req.params.id));
+  const event = await withJob(Event.findOne({ _id: req.params.id, user: req.user._id }));
   if (!event) return res.status(404).json({ message: 'Event not found' });
   res.json(event);
 }));
@@ -112,9 +113,9 @@ router.post('/', wrap(async (req, res) => {
   if (!data.job || !mongoose.isValidObjectId(data.job)) {
     return res.status(400).json({ message: 'Choose the job this event belongs to', errors: { job: 'Choose the job this event belongs to' } });
   }
-  if (!(await Job.exists({ _id: data.job }))) return res.status(404).json({ message: 'Job not found' });
+  if (!(await Job.exists({ _id: data.job, user: req.user._id }))) return res.status(404).json({ message: 'Job not found' });
 
-  const event = new Event(data);
+  const event = new Event({ ...data, user: req.user._id });
   if (Array.isArray(req.body.reminders)) event.setReminders(req.body.reminders);
   await event.save();
 
@@ -124,12 +125,12 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 router.put('/:id', wrap(async (req, res) => {
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findOne({ _id: req.params.id, user: req.user._id });
   if (!event) return res.status(404).json({ message: 'Event not found' });
 
   const data = pick(req.body);
   if (data.job && String(data.job) !== String(event.job)) {
-    if (!mongoose.isValidObjectId(data.job) || !(await Job.exists({ _id: data.job }))) {
+    if (!mongoose.isValidObjectId(data.job) || !(await Job.exists({ _id: data.job, user: req.user._id }))) {
       return res.status(404).json({ message: 'Job not found' });
     }
   }
@@ -152,7 +153,7 @@ router.put('/:id', wrap(async (req, res) => {
 
 // POST /api/events/:id/reschedule  { startsAt, timeZone?, note? }
 router.post('/:id/reschedule', wrap(async (req, res) => {
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findOne({ _id: req.params.id, user: req.user._id });
   if (!event) return res.status(404).json({ message: 'Event not found' });
 
   const next = new Date(req.body.startsAt);
@@ -171,7 +172,7 @@ router.patch('/:id/status', wrap(async (req, res) => {
   if (!Event.STATUSES.includes(status)) {
     return res.status(400).json({ message: 'Unknown event status', errors: { status: 'Unknown event status' } });
   }
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findOne({ _id: req.params.id, user: req.user._id });
   if (!event) return res.status(404).json({ message: 'Event not found' });
 
   event.status = status;
@@ -185,7 +186,7 @@ router.patch('/:id/status', wrap(async (req, res) => {
 
 // POST /api/events/:id/reminders/:reminderId/dismiss
 router.post('/:id/reminders/:reminderId/dismiss', wrap(async (req, res) => {
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findOne({ _id: req.params.id, user: req.user._id });
   if (!event) return res.status(404).json({ message: 'Event not found' });
   const reminder = event.reminders.id(req.params.reminderId);
   if (!reminder) return res.status(404).json({ message: 'Reminder not found' });
@@ -195,7 +196,7 @@ router.post('/:id/reminders/:reminderId/dismiss', wrap(async (req, res) => {
 }));
 
 router.delete('/:id', wrap(async (req, res) => {
-  const event = await Event.findByIdAndDelete(req.params.id);
+  const event = await Event.findOneAndDelete({ _id: req.params.id, user: req.user._id });
   if (!event) return res.status(404).json({ message: 'Event not found' });
   res.status(204).end();
 }));

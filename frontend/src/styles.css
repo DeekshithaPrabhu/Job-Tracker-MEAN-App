@@ -621,3 +621,96 @@ legend { font-weight: 600; font-size: 1.02rem; letter-spacing: -0.02em; padding:
   .filterbar { padding: 0 16px 4px; }
   .pager { justify-content: center; }
 }
+
+/* ==========================================================================
+   Sign in and account
+   ========================================================================== */
+.auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.auth-card {
+  width: min(440px, 100%); background: var(--surface); border-radius: 28px; padding: 36px 32px;
+  box-shadow: var(--shadow-md); display: grid; gap: 14px;
+}
+.auth-card h1 { font-size: 1.9rem; letter-spacing: -0.03em; margin: 4px 0 0; }
+.auth-card p { margin: 0; }
+.auth-card form { display: grid; gap: 14px; margin-top: 8px; }
+.auth-switch { text-align: center; margin-top: 4px; }
+.auth-loading { min-height: 100vh; display: grid; place-items: center; }
+.btn.wide { width: 100%; justify-content: center; padding-top: 12px; padding-bottom: 12px; }
+.link {
+  font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-weight: 600;
+}
+.link:hover { text-decoration: underline; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+
+.user-menu { display: flex; align-items: center; gap: 6px; margin-left: 4px; }
+.user-name {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: 0.88rem;
+  color: var(--muted); background: none; border: 0; border-radius: 99px; padding: 6px 10px; cursor: pointer;
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.user-name:hover, .user-name.on { background: var(--fill-soft); color: inherit; }
+@media (max-width: 720px) { .user-name { max-width: 84px; } }
+
+/* ==========================================================================
+   Job sheet tabs, notes, contacts and documents
+   ========================================================================== */
+.tabs {
+  display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--fill-soft);
+  position: sticky; top: -20px; z-index: 2;
+}
+.tabs button {
+  flex: 1; font: inherit; font-weight: 500; font-size: 0.9rem; color: var(--muted); background: transparent; border: 0;
+  border-radius: 10px; padding: 8px 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.tabs button.on { background: var(--surface); color: inherit; box-shadow: var(--shadow-sm); }
+.tab-count {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: inline-grid; place-items: center;
+  background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700;
+}
+.tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+.row-end { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.panel .sub-h {
+  margin: 8px 0 0; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600;
+}
+textarea { width: 100%; resize: vertical; min-height: 120px; }
+
+.save-bar {
+  position: sticky; bottom: -24px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
+  padding: 12px 0; background: var(--bg);
+}
+.save-bar .muted { margin-right: auto; }
+
+.contact-form { display: grid; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.contact-list, .doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.contact, .doc { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.contact:last-child, .doc:last-child { border-bottom: 0; }
+.contact-main, .doc-main { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.contact-main strong, .doc-main strong { font-weight: 600; overflow-wrap: anywhere; }
+.contact-links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.contact-links a, .doc-main a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.contact-links a:hover, .doc-main a:hover { text-decoration: underline; }
+.contact-notes { margin: 4px 0 0; white-space: pre-wrap; color: var(--muted); }
+.contact-actions, .doc-actions { display: flex; gap: 4px; flex: none; }
+.doc { align-items: center; }
+.doc-kind {
+  flex: none; min-width: 44px; padding: 6px 8px; border-radius: 10px; text-align: center; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.04em; background: var(--fill-soft); color: var(--muted);
+}
+.doc-kind[data-kind='link'] { background: rgba(0, 122, 255, 0.12); color: var(--accent); }
+.doc-main input { width: 100%; }
+@media (max-width: 560px) {
+  .contact, .doc { flex-wrap: wrap; }
+}
+
+/* ==========================================================================
+   Forgot password and profile
+   ========================================================================== */
+.banner.ok { background: rgba(52, 199, 89, 0.14); color: #1d7a3a; border-radius: 14px; padding: 12px 16px; font-size: 0.92rem; }
+@media (prefers-color-scheme: dark) { .banner.ok { color: #6fdc8c; } }
+.auth-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+.profile { display: grid; gap: 18px; max-width: 760px; }
+.profile form { display: grid; gap: 14px; }
+.profile input:disabled { opacity: 0.7; cursor: not-allowed; }

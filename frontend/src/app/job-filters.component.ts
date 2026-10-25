@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, output, signal } from '@angular/core';
 import {
   DATE_LABELS, DATE_PRESETS, DEFAULT_SORT, DateRangeKey, SORT_OPTIONS
 } from './job-query.model';
@@ -13,10 +13,13 @@ import { EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, PRIORITIES, PRIORITY_COLORS, STATU
   template: `
     <section class="filterbar" aria-label="Search, filter and sort">
       <div class="fb-row">
-        <input class="pill-input" type="search" placeholder="Search company, title, skill" aria-label="Search applications"
-               [value]="q.filters().search" (input)="q.setText('search', $any($event.target).value)" />
+        <!-- Re-created on reset, so text typed a moment ago is cleared even before it was applied. -->
+        @for (k of [resetKey()]; track k) {
+          <input class="pill-input" type="search" placeholder="Search company, title, skill" aria-label="Search applications"
+                 [value]="q.filters().search" (input)="q.setText('search', $any($event.target).value)" />
+        }
 
-        <button type="button" class="btn" [class.primary]="q.activeCount() > 0" [attr.aria-expanded]="open()"
+        <button type="button" class="btn" [class.primary]="open() || q.activeCount() > 0" [attr.aria-expanded]="open()"
                 aria-controls="filter-panel" (click)="open.set(!open())">
           Filters
           @if (q.activeCount() > 0) { <span class="count-badge">{{ q.activeCount() }}</span> }
@@ -47,9 +50,8 @@ import { EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, PRIORITIES, PRIORITY_COLORS, STATU
         @if (canSave()) {
           <button type="button" class="btn small" (click)="startSave()">Save filter</button>
         }
-        @if (q.activeCount() > 0) {
-          <button type="button" class="btn small ghost" (click)="q.clear()">Clear</button>
-        }
+        <button type="button" class="btn small" [disabled]="!modified()" (click)="doReset()"
+                title="Clear the search, filters and sorting and show the default list">Reset</button>
       </div>
 
       @if (saving()) {
@@ -156,7 +158,13 @@ export class JobFiltersComponent {
     { key: 'interview', label: DATE_LABELS.interview, presets: DATE_PRESETS.interview }
   ];
 
+  /** True when the list differs from the default (set by the page, which also knows the Active/Favorites/Archived tab). */
+  readonly modified = input(false);
+  /** Fired by Reset; the page returns the list to its default tab. */
+  readonly reset = output<void>();
+
   readonly open = signal(false);
+  readonly resetKey = signal(0);
   readonly saving = signal(false);
   readonly name = signal('');
   readonly message = signal('');
@@ -169,6 +177,14 @@ export class JobFiltersComponent {
   canSave(): boolean {
     const something = this.q.activeCount() > 0 || this.q.sortValue() !== DEFAULT_SORT;
     return something && !this.saving() && (!this.q.activeSaved() || this.q.savedChanged());
+  }
+
+  doReset(): void {
+    this.open.set(false);
+    this.saving.set(false);
+    this.message.set('');
+    this.resetKey.update((k) => k + 1);
+    this.reset.emit();
   }
 
   startSave(): void {

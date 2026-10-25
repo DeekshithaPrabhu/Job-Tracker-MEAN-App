@@ -44,8 +44,10 @@ const toRange = (from, to) => {
 };
 const hasType = (field, types) => ({ $cond: [{ $in: [{ $type: field }, types] }, 1, 0] });
 
-function buildSearch(q = {}, { now = new Date(), eventsCollection = 'events' } = {}) {
+function buildSearch(q = {}, { now = new Date(), eventsCollection = 'events', user } = {}) {
   const clauses = [];
+  // Every search is limited to one person's jobs.
+  if (user) clauses.push({ user });
 
   const view = q.view || 'active';
   if (view === 'active') clauses.push({ isArchived: false });
@@ -79,7 +81,7 @@ function buildSearch(q = {}, { now = new Date(), eventsCollection = 'events' } =
 
   if (q.search && String(q.search).trim()) {
     const rx = new RegExp(escapeRegex(String(q.search).trim()), 'i');
-    clauses.push({ $or: [{ company: rx }, { title: rx }, { location: rx }, { skills: rx }, { 'recruiter.name': rx }] });
+    clauses.push({ $or: [{ company: rx }, { title: rx }, { location: rx }, { skills: rx }, { 'recruiter.name': rx }, { 'contacts.name': rx }] });
   }
 
   const stages = [];
@@ -145,7 +147,7 @@ function buildSearch(q = {}, { now = new Date(), eventsCollection = 'events' } =
   return {
     stages,
     // Helper fields used only for filtering and sorting are removed from the response.
-    cleanup: { $project: { interviews: 0, salaryTop: 0, hasApplied: 0, hasSalary: 0, hasNext: 0 } },
+    cleanup: { $project: { interviews: 0, salaryTop: 0, hasApplied: 0, hasSalary: 0, hasNext: 0, 'documents.storageKey': 0 } },
     paged,
     page,
     limit

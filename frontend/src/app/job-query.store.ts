@@ -171,6 +171,15 @@ export class JobQueryStore {
     this.reset();
   }
 
+  /** Search, filters, sorting, saved filter and page all go back to the defaults, with a single reload. */
+  resetAll(): void {
+    this.pendingText = {};
+    this.filters.set(emptyFilters());
+    this.sortValue.set(DEFAULT_SORT);
+    this.activeSavedId.set(null);
+    this.reset();
+  }
+
   clear(): void {
     this.pendingText = {};
     this.filters.set(emptyFilters());

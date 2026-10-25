@@ -2,12 +2,17 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { EVENT_COLORS, JobEvent, eventLabel, isActive } from './event.model';
 import { Job, JobStatus, PRIORITY_COLORS, STATUSES, STATUS_COLORS, formatSalary } from './job.model';
+import { JobContactsComponent } from './job-contacts.component';
+import { JobDocumentsComponent } from './job-documents.component';
+import { JobNotesComponent } from './job-notes.component';
 import { ScheduleStore } from './schedule.store';
+
+type Tab = 'overview' | 'notes' | 'people' | 'documents';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, JobNotesComponent, JobContactsComponent, JobDocumentsComponent],
   template: `
     <div class="scrim" (click)="closed.emit()"></div>
     <aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="job().title + ' at ' + job().company">
@@ -27,6 +32,20 @@ import { ScheduleStore } from './schedule.store';
       </header>
 
       <div class="drawer-body">
+        <nav class="tabs" role="tablist" aria-label="Job sections">
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'overview'" [class.on]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button>
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'notes'" [class.on]="tab() === 'notes'" (click)="tab.set('notes')">
+            Notes @if (hasNotes()) { <span class="tab-dot" aria-label="has notes"></span> }
+          </button>
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'people'" [class.on]="tab() === 'people'" (click)="tab.set('people')">
+            People @if (contactCount()) { <span class="tab-count">{{ contactCount() }}</span> }
+          </button>
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'documents'" [class.on]="tab() === 'documents'" (click)="tab.set('documents')">
+            Documents @if (docCount()) { <span class="tab-count">{{ docCount() }}</span> }
+          </button>
+        </nav>
+
+        @if (tab() === 'overview') {
         <section class="panel">
           <h3>Status</h3>
           <div class="status-row">
@@ -152,6 +171,14 @@ import { ScheduleStore } from './schedule.store';
           </section>
         }
 
+        } @else if (tab() === 'notes') {
+          <app-job-notes [job]="job()" (updated)="jobUpdated.emit($event)" />
+        } @else if (tab() === 'people') {
+          <app-job-contacts [job]="job()" (updated)="jobUpdated.emit($event)" />
+        } @else {
+          <app-job-documents [job]="job()" (updated)="jobUpdated.emit($event)" />
+        }
+
         <footer class="detail-actions">
           <button type="button" class="btn" (click)="edit.emit()">Edit</button>
           <button type="button" class="btn" (click)="archive.emit()">{{ job().isArchived ? 'Restore' : 'Archive' }}</button>
@@ -173,6 +200,13 @@ export class JobDetailComponent {
   readonly archive = output<void>();
   readonly remove = output<void>();
   readonly statusChange = output<{ status: JobStatus; note: string }>();
+  /** Fired when notes, contacts or documents change; carries the updated job. */
+  readonly jobUpdated = output<Job>();
+
+  readonly tab = signal<Tab>('overview');
+  readonly contactCount = computed(() => this.job().contacts?.length ?? 0);
+  readonly docCount = computed(() => this.job().documents?.length ?? 0);
+  readonly hasNotes = computed(() => !!(this.job().companyNotes?.trim() || this.job().recruiterNotes?.trim()));
 
   readonly statuses = STATUSES;
   priorityColor(): string {

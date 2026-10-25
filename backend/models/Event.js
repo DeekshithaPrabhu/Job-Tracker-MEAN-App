@@ -69,6 +69,7 @@ const rescheduleSchema = new Schema(
 
 const eventSchema = new Schema(
   {
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     job: { type: Schema.Types.ObjectId, ref: 'Job', required: [true, 'Choose the job this event belongs to'], index: true },
     type: { type: String, enum: { values: TYPES, message: 'Unknown event type' }, default: 'Interview', required: true },
     round: { type: String, enum: { values: ROUNDS, message: 'Round must be HR, Technical, Managerial or Final' }, set: blankToUndefined },

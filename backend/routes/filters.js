@@ -32,16 +32,16 @@ const duplicate = (res) =>
 
 // GET /api/filters
 router.get('/', wrap(async (req, res) => {
-  res.json(await SavedFilter.find().sort({ name: 1 }).collation({ locale: 'en', strength: 2 }));
+  res.json(await SavedFilter.find({ user: req.user._id }).sort({ name: 1 }).collation({ locale: 'en', strength: 2 }));
 }));
 
 // POST /api/filters  { name, filters, sort, order }
 router.post('/', wrap(async (req, res) => {
-  if ((await SavedFilter.countDocuments()) >= MAX_SAVED) {
+  if ((await SavedFilter.countDocuments({ user: req.user._id })) >= MAX_SAVED) {
     return res.status(400).json({ message: `You can keep up to ${MAX_SAVED} saved filters. Delete one first.` });
   }
   try {
-    res.status(201).json(await SavedFilter.create({ name: req.body.name, ...fields(req.body) }));
+    res.status(201).json(await SavedFilter.create({ user: req.user._id, name: req.body.name, ...fields(req.body) }));
   } catch (err) {
     if (err.code === 11000) return duplicate(res);
     throw err;
@@ -50,7 +50,7 @@ router.post('/', wrap(async (req, res) => {
 
 // PUT /api/filters/:id  { name?, filters, sort, order }  -> replaces what the filter applies (and renames it when name is sent)
 router.put('/:id', wrap(async (req, res) => {
-  const saved = await SavedFilter.findById(req.params.id);
+  const saved = await SavedFilter.findOne({ _id: req.params.id, user: req.user._id });
   if (!saved) return res.status(404).json({ message: 'Saved filter not found' });
   if (req.body.name !== undefined) saved.name = req.body.name;
   saved.set(fields(req.body));
@@ -64,7 +64,7 @@ router.put('/:id', wrap(async (req, res) => {
 }));
 
 router.delete('/:id', wrap(async (req, res) => {
-  const removed = await SavedFilter.findByIdAndDelete(req.params.id);
+  const removed = await SavedFilter.findOneAndDelete({ _id: req.params.id, user: req.user._id });
   if (!removed) return res.status(404).json({ message: 'Saved filter not found' });
   res.status(204).end();
 }));

@@ -2,30 +2,33 @@ import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cd
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { AuthService } from './auth.service';
 import { DashboardComponent } from './dashboard.component';
 import { EventDetailComponent } from './event-detail.component';
 import { EventFormComponent } from './event-form.component';
 import { JobDetailComponent } from './job-detail.component';
 import { JobFiltersComponent } from './job-filters.component';
 import { JobFormComponent } from './job-form.component';
+import { DEFAULT_SORT } from './job-query.model';
 import { JobQueryStore } from './job-query.store';
 import {
   Job, JobStats, JobStatus, JobView, PRIORITY_COLORS, Priority, STATUSES, STATUS_COLORS, formatSalary
 } from './job.model';
 import { JobService } from './job.service';
 import { PagerComponent } from './pager.component';
+import { ProfileComponent } from './profile.component';
 import { RemindersComponent } from './reminders.component';
 import { ScheduleComponent } from './schedule.component';
 import { ScheduleStore } from './schedule.store';
 
 type Layout = 'board' | 'table';
-type Page = 'dashboard' | 'applications' | 'schedule';
+type Page = 'dashboard' | 'applications' | 'schedule' | 'profile';
 
 @Component({
-  selector: 'app-root',
+  selector: 'app-workspace',
   standalone: true,
   imports: [
-    DatePipe, CdkDropListGroup, CdkDropList, CdkDrag, JobFormComponent, JobDetailComponent, JobFiltersComponent, PagerComponent,
+    DatePipe, CdkDropListGroup, CdkDropList, CdkDrag, JobFormComponent, JobDetailComponent, JobFiltersComponent, PagerComponent, ProfileComponent,
     ScheduleComponent, DashboardComponent, EventFormComponent, EventDetailComponent, RemindersComponent
   ],
   template: `
@@ -37,11 +40,16 @@ type Page = 'dashboard' | 'applications' | 'schedule';
           <button type="button" [class.on]="page() === 'applications'" [attr.aria-current]="page() === 'applications' ? 'page' : null" (click)="setPage('applications')">Applications</button>
           <button type="button" [class.on]="page() === 'schedule'" [attr.aria-current]="page() === 'schedule' ? 'page' : null" (click)="setPage('schedule')">Schedule</button>
         </nav>
-        @if (page() !== 'schedule') {
-          <button type="button" class="btn primary" (click)="openForm(null)">Save a job</button>
-        } @else {
+        @if (page() === 'schedule') {
           <button type="button" class="btn primary" (click)="store.openForm()">Schedule event</button>
+        } @else if (page() !== 'profile') {
+          <button type="button" class="btn primary" (click)="openForm(null)">Save a job</button>
         }
+        <div class="user-menu">
+          <button type="button" class="user-name" [class.on]="page() === 'profile'" [attr.aria-current]="page() === 'profile' ? 'page' : null"
+                  [attr.title]="auth.user()?.email" (click)="setPage('profile')">{{ auth.user()?.name }}</button>
+          <button type="button" class="btn small ghost" (click)="auth.logout()">Sign out</button>
+        </div>
       </div>
     </header>
 
@@ -70,7 +78,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
         </div>
       </section>
 
-      <app-job-filters />
+      <app-job-filters [modified]="listModified()" (reset)="resetList()" />
 
       <main class="page" aria-live="polite">
         @if (error()) { <p class="banner err" role="alert">{{ error() }}</p> }
@@ -207,6 +215,8 @@ type Page = 'dashboard' | 'applications' | 'schedule';
       </main>
     } @else if (page() === 'schedule') {
       <app-schedule />
+    } @else if (page() === 'profile') {
+      <app-profile />
     } @else {
       <app-dashboard
         [refreshKey]="jobsVersion()"
@@ -223,7 +233,8 @@ type Page = 'dashboard' | 'applications' | 'schedule';
         (favorite)="toggleFavorite(job)"
         (archive)="toggleArchive(job)"
         (remove)="remove(job)"
-        (statusChange)="changeStatus(job, $event.status, $event.note)" />
+        (statusChange)="changeStatus(job, $event.status, $event.note)"
+        (jobUpdated)="onJobUpdated($event)" />
     }
 
     @if (formOpen()) {
@@ -242,6 +253,7 @@ type Page = 'dashboard' | 'applications' | 'schedule';
   `
 })
 export class AppComponent {
+  readonly auth = inject(AuthService);
   readonly store = inject(ScheduleStore);
   private readonly api = inject(JobService);
   private readonly destroyRef = inject(DestroyRef);
@@ -383,6 +395,23 @@ export class AppComponent {
         this.fail('That job could not be found. It may have been deleted.');
       }
     });
+  }
+
+  /** True when anything differs from the default list: a search, filter, sort, other tab or later page. */
+  readonly listModified = computed(
+    () => this.q.activeCount() > 0 || this.q.sortValue() !== DEFAULT_SORT || this.view() !== 'active' || this.q.page() > 1
+  );
+
+  /** Back to the plain Active list (board or table, whichever is showing): no search, filters or custom sort. */
+  resetList(): void {
+    this.view.set('active');
+    this.q.resetAll();
+  }
+
+  /** A note, contact or document changed: swap in the updated job without reloading the list. */
+  onJobUpdated(job: Job): void {
+    this.jobs.update((list) => list.map((j) => (j._id === job._id ? { ...job, nextInterviewAt: j.nextInterviewAt } : j)));
+    if (this.outsideJob()?._id === job._id) this.outsideJob.set(job);
   }
 
   /** Keeps a job opened from outside the current page up to date after changes. */
