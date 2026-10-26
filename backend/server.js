@@ -16,15 +16,18 @@ const { securityHeaders, sameOriginOnly } = require("./middleware/security");
 
 const app = express();
 
-// Read environment variables safely.
+// =====================================================
+// 1. Environment configuration
+// =====================================================
+
 const MONGODB_URI = process.env.MONGODB_URI;
 
-const ORIGINS = (process.env.CLIENT_ORIGIN || "")
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
-// Trust proxy only when explicitly configured.
+// Configure trusted proxy only when explicitly specified.
 if (process.env.TRUST_PROXY) {
   app.set(
     "trust proxy",
@@ -36,28 +39,71 @@ if (process.env.TRUST_PROXY) {
 
 app.disable("x-powered-by");
 
+// =====================================================
+// 2. Security and CORS middleware
+// =====================================================
+
 app.use(securityHeaders);
 
 app.use(
   cors({
-    origin: ORIGINS,
+    origin: (origin, callback) => {
+      // Allow requests without Origin, such as certain server-to-server calls.
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.replace(/\/$/, "");
+
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      console.warn("CORS blocked origin:", origin);
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-app.use(sameOriginOnly(ORIGINS));
+// Retain the existing security middleware.
+// Its behavior depends on middleware/security.js.
+app.use(sameOriginOnly(allowedOrigins));
+
+// =====================================================
+// 3. Request body parsing
+// =====================================================
 
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false }));
 
-// Health check does not require a database connection.
-app.get("/api/health", (req, res) => {
-  res.json({
+// =====================================================
+// 4. Health check
+// =====================================================
+
+// This endpoint does not require a database connection.
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({
     status: "ok",
     environment: process.env.NODE_ENV || "development",
   });
 });
 
-// Cache the MongoDB connection promise within this serverless instance.
+// Root endpoint.
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Job Tracker API is running",
+  });
+});
+
+// =====================================================
+// 5. MongoDB connection for Vercel serverless
+// =====================================================
+
 let dbConnectionPromise = null;
 
 async function connectDB() {
@@ -65,27 +111,29 @@ async function connectDB() {
     throw new Error("MONGODB_URI environment variable is not configured");
   }
 
+  // Reuse an established connection.
   if (mongoose.connection.readyState === 1) {
     return;
   }
 
+  // Reuse an in-progress connection attempt.
   if (!dbConnectionPromise) {
-    dbConnectionPromise = mongoose.connect(MONGODB_URI).catch((err) => {
+    dbConnectionPromise = mongoose.connect(MONGODB_URI).catch((error) => {
       dbConnectionPromise = null;
-      throw err;
+      throw error;
     });
   }
 
   await dbConnectionPromise;
 }
 
-// Ensure the database is available before handling API requests.
+// Connect before processing database-dependent API requests.
 app.use("/api", async (req, res, next) => {
   try {
     await connectDB();
     next();
-  } catch (err) {
-    console.error("MongoDB connection failed:", err.message);
+  } catch (error) {
+    console.error("MongoDB connection failed:", error.message);
 
     return res.status(503).json({
       message: "Database temporarily unavailable",
@@ -93,22 +141,35 @@ app.use("/api", async (req, res, next) => {
   }
 });
 
-// Authentication routes.
+// =====================================================
+// 6. API routes
+// =====================================================
+
+// Public authentication routes.
+// The routes themselves should enforce appropriate validation.
 app.use("/api/auth", authRoutes);
 
-// Routes requiring an authenticated user.
+// Protected routes.
 app.use("/api/jobs/:jobId", requireAuth, jobDetailRoutes);
 app.use("/api/jobs", requireAuth, jobRoutes);
 app.use("/api/events", requireAuth, eventRoutes);
 app.use("/api/analytics", requireAuth, analyticsRoutes);
 app.use("/api/filters", requireAuth, filterRoutes);
 
-// Unknown routes.
+// =====================================================
+// 7. 404 handler
+// =====================================================
+
 app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+  return res.status(404).json({
+    message: "Route not found",
+  });
 });
 
-// Central error handler.
+// =====================================================
+// 8. Central error handler
+// =====================================================
+
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -135,7 +196,7 @@ app.use((err, req, res, next) => {
     return res.status(413).json({
       message: "Request body is too large",
       errors: {
-        file: "Files can be up to 10 MB.",
+        file: "The request exceeds the allowed size.",
       },
     });
   }
@@ -146,6 +207,12 @@ app.use((err, req, res, next) => {
     });
   }
 
+  if (err.message === "Origin not allowed by CORS") {
+    return res.status(403).json({
+      message: "Origin not allowed",
+    });
+  }
+
   console.error("Unhandled API error:", err);
 
   return res.status(500).json({
@@ -153,8 +220,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// IMPORTANT:
-// Do not call app.listen() in this Vercel entry point.
-// Vercel handles incoming requests to the exported Express app.
+// =====================================================
+// 9. Export Express app for Vercel
+// =====================================================
 
+// Do not call app.listen() in this Vercel entry point.
 module.exports = app;
