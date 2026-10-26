@@ -2,11 +2,12 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Job, JobInput, JobPage, JobQuery, JobStats, JobStatus } from './job.model';
+import { environment } from '../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class JobService {
   private readonly http = inject(HttpClient);
-  private readonly base = '/api/jobs';
+  private readonly base = `${environment.apiUrl}/api/jobs`;
 
   private params(query: JobQuery): HttpParams {
     let params = new HttpParams();

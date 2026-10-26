@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Analytics } from './analytics.model';
 import { localTimeZone } from './time.util';
+import { environment } from '../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class AnalyticsService {
@@ -10,6 +11,6 @@ export class AnalyticsService {
 
   /** Weeks and months are cut in the viewer's own time zone. */
   load(): Observable<Analytics> {
-    return this.http.get<Analytics>('/api/analytics', { params: new HttpParams().set('tz', localTimeZone()) });
+    return this.http.get<Analytics>(`${environment.apiUrl}/api/analytics`, { params: new HttpParams().set('tz', localTimeZone()) });
   }
 }

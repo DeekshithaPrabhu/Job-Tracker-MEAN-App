@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, Subject, tap } from 'rxjs';
 import { DueReminder, EventInput, EventStatus, JobEvent } from './event.model';
+import { environment } from '../environments/environment';
 
 export interface FormRequest {
   event?: JobEvent | null;
@@ -15,7 +16,7 @@ type NotifyState = NotificationPermission | 'unsupported';
 @Injectable({ providedIn: 'root' })
 export class ScheduleStore {
   private readonly http = inject(HttpClient);
-  private readonly base = '/api/events';
+  private readonly base = `${environment.apiUrl}/api/events`;
 
   readonly events = signal<JobEvent[]>([]);
   readonly loading = signal(false);
