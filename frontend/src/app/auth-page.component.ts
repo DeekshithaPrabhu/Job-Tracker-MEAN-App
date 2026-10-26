@@ -189,7 +189,7 @@ export class AuthPageComponent implements OnInit {
       this.serverErrors.set(err.error?.errors ?? {});
       this.formError.set(
         err.status === 0
-          ? 'Could not reach the server. Check that the API is running on port 3000.'
+          ? 'Could not reach the server.'
           : err.error?.errors ? '' : err.error?.message ?? 'Something went wrong. Try again.'
       );
     };

@@ -54,7 +54,7 @@ export class ScheduleStore {
         this.changed$.next();
       },
       error: () => {
-        this.error.set('Could not load your schedule. Check that the API is running on port 3000.');
+        this.error.set('Could not load your schedule.');
         this.loading.set(false);
       }
     });

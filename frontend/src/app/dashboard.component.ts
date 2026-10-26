@@ -372,7 +372,7 @@ export class DashboardComponent {
         switchMap(() =>
           this.api.load().pipe(
             catchError(() => {
-              this.error.set('Could not load your dashboard. Check that the API is running on port 3000.');
+              this.error.set('Could not load your dashboard.');
               this.loading.set(false);
               return EMPTY;
             })

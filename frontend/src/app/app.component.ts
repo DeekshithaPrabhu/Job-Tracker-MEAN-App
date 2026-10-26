@@ -359,7 +359,7 @@ export class AppComponent {
         this.refreshOutsideJob(result.items);
       },
       error: () => {
-        if (seq === this.loadSeq) this.fail('Could not load jobs. Check that the API is running on port 3000.');
+        if (seq === this.loadSeq) this.fail('Could not load jobs.');
       }
     });
     this.api.stats().subscribe({ next: (s) => this.stats.set(s), error: () => undefined });
@@ -466,11 +466,11 @@ export class AppComponent {
       list.map((j) =>
         j._id === job._id
           ? {
-              ...j,
-              status,
-              statusChangedAt: now,
-              statusHistory: [...(j.statusHistory ?? []), { from: j.status, to: status, changedAt: now, note }]
-            }
+            ...j,
+            status,
+            statusChangedAt: now,
+            statusHistory: [...(j.statusHistory ?? []), { from: j.status, to: status, changedAt: now, note }]
+          }
           : j
       )
     );

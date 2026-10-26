@@ -220,7 +220,7 @@ export class JobFiltersComponent {
   private fail(err: HttpErrorResponse, fallback: string): void {
     this.message.set(
       err.status === 0
-        ? 'Could not reach the server. Check that the API is running on port 3000.'
+        ? 'Could not reach the server.'
         : err.error?.errors?.name ?? err.error?.message ?? fallback
     );
   }
